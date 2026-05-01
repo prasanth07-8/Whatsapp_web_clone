@@ -1,0 +1,873 @@
+import { useState, useEffect, useRef } from 'react';
+import MessageBubble from '../MessageBubble/MessageBubble';
+import EmojiPickerPanel from '../EmojiPicker/EmojiPickerPanel';
+import AudioRecorder from '../AudioRecorder/AudioRecorder';
+import ChatMenu from '../ChatMenu/ChatMenu';
+import AttachMenu from '../AttachMenu/AttachMenu';
+import MediaPreviewModal from '../MediaPreview/MediaPreviewModal';
+import PollModal from '../Modals/PollModal';
+import ContactModal from '../Modals/ContactModal';
+import EventModal from '../Modals/EventModal';
+import ContactInfo from '../ContactInfo/ContactInfo';
+import ConfirmDialog from '../Modals/ConfirmDialog';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api';
+import DefaultAvatar from '../DefaultAvatar';
+import './ChatWindow.css';
+
+function formatLastSeen(lastSeen) {
+  if (!lastSeen) return 'last seen recently';
+  const date = new Date(lastSeen);
+  const now   = new Date();
+  const mins  = Math.floor((now - date) / 60000);
+  const hours = Math.floor((now - date) / 3600000);
+  if (mins < 1)   return 'last seen just now';
+  if (mins < 60)  return `last seen ${mins} min ago`;
+  if (hours < 24) return `last seen today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString())
+    return `last seen yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  return `last seen ${date.toLocaleDateString([], { day: 'numeric', month: 'short' })}`;
+}
+
+export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, lastSeenMap, onChatDeleted, incomingMsg, onIncomingMsgHandled, onMobileBack }) {
+  const { user } = useAuth();
+  const [messages, setMessages]       = useState([]);
+  const [firstUnreadIdx, setFirstUnreadIdx] = useState(-1);
+  const [text, setText]               = useState('');
+  const [typing, setTyping]           = useState(false);
+  const [isTyping, setIsTyping]       = useState(false);
+  const [searchOpen, setSearchOpen]   = useState(false);
+  const [searchTerm, setSearchTerm]   = useState('');
+  const [searchIdx, setSearchIdx]     = useState(0);
+  const [replyTo, setReplyTo]         = useState(null);
+  const [editMsg, setEditMsg]         = useState(null);
+  const [forwardMsg, setForwardMsg]   = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [selectMode, setSelectMode]   = useState(false);
+  const [pinnedOpen, setPinnedOpen]   = useState(false);
+  const [pinnedMsgs, setPinnedMsgs]   = useState([]);
+  const [showEmoji, setShowEmoji]       = useState(false);
+  const [showAudio, setShowAudio]       = useState(false);
+  const [mediaFiles, setMediaFiles]     = useState(null); // array for preview modal
+  const [showChatMenu, setShowChatMenu] = useState(false);
+  const [isFavourite, setIsFavourite]   = useState(false);
+  const [showAttach, setShowAttach]     = useState(false);
+  const [showPoll, setShowPoll]         = useState(false);
+  const [showContact, setShowContact]   = useState(false);
+  const [showEvent, setShowEvent]       = useState(false);
+  const [showContactInfo, setShowContactInfo] = useState(false);
+  const [confirmDialog, setConfirmDialog]     = useState(null); // { title, message, icon, onConfirm }
+  const bottomRef     = useRef(null);
+  const unreadRef     = useRef(null);
+  const typingTimeout = useRef(null);
+  const searchRef     = useRef(null);
+  const inputRef      = useRef(null);
+
+  const otherUser = chat?.participants?.find((p) => p._id !== user._id);
+
+  // Handle live incoming message pushed from ChatPage
+  useEffect(() => {
+    if (!incomingMsg || incomingMsg.chatId !== chat?._id) return;
+    const senderId = incomingMsg.senderId?._id?.toString() || incomingMsg.senderId?.toString();
+    if (senderId === user._id?.toString()) return;
+
+    setMessages((prev) => {
+      // Avoid duplicates
+      if (prev.some((m) => m._id === incomingMsg._id)) return prev;
+      return [...prev, { ...incomingMsg, status: 'delivered' }];
+    });
+
+    // Ack delivery + mark as read immediately since chat is open
+    socket?.emit('message_delivered', { messageId: incomingMsg._id, chatId: incomingMsg.chatId, senderId });
+    api.put(`/messages/${chat._id}/read`).then(() => {
+      socket?.emit('messages_read', { chatId: chat._id, senderId });
+    });
+
+    onIncomingMsgHandled?.();
+  }, [incomingMsg]);
+
+  // Fetch messages + mark read
+  useEffect(() => {
+    if (!chat) return;
+    setSearchOpen(false); setSearchTerm(''); setReplyTo(null);
+    setEditMsg(null); setSelectMode(false); setSelectedIds(new Set());
+    setPinnedOpen(false); setShowContactInfo(false);
+
+    api.get(`/messages/${chat._id}`).then((res) => {
+      const msgs = res.data;
+      setMessages(msgs);
+      // Find first unread message sent by the other user
+      const idx = msgs.findIndex(
+        (m) => (m.senderId?._id?.toString() !== user._id?.toString() && m.senderId?.toString() !== user._id?.toString()) && m.status !== 'read'
+      );
+      setFirstUnreadIdx(idx);
+    });
+    setIsFavourite(chat.isFavourite || false);
+    socket?.emit('join_room', chat._id);
+    api.put(`/messages/${chat._id}/read`).then(() => {
+      socket?.emit('messages_read', { chatId: chat._id, senderId: otherUser?._id });
+      // Clear divider after a short delay so user sees it briefly
+      setTimeout(() => setFirstUnreadIdx(-1), 2000);
+    });
+    return () => socket?.emit('leave_room', chat._id);
+  }, [chat?._id]);
+
+  // Socket listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleReceive = (msg) => {
+      // Handled by ChatPage → incomingMsg prop. Only process here as fallback
+      // if ChatPage didn't catch it (shouldn't happen, but safety net)
+      const senderId = msg.senderId?._id?.toString() || msg.senderId?.toString();
+      if (msg.chatId === chat?._id && senderId !== user._id?.toString()) {
+        setMessages((prev) => {
+          if (prev.some((m) => m._id === msg._id)) return prev;
+          return [...prev, { ...msg, status: 'delivered' }];
+        });
+        socket.emit('message_delivered', { messageId: msg._id, chatId: msg.chatId, senderId });
+        api.put(`/messages/${chat._id}/read`).then(() => {
+          socket.emit('messages_read', { chatId: chat._id, senderId });
+        });
+      }
+    };
+
+    const handleUpdated = (msg) => {
+      if (msg.chatId === chat?._id) {
+        setMessages((prev) => prev.map((m) => (m._id === msg._id ? msg : m)));
+      }
+    };
+
+    const handleStatusUpdate = ({ messageId, status }) => {
+      setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, status } : m)));
+    };
+
+    const handleReadUpdate = ({ chatId }) => {
+      if (chatId === chat?._id)
+        setMessages((prev) => prev.map((m) => ({ ...m, status: 'read' })));
+    };
+
+    socket.on('receive_message',       handleReceive);
+    socket.on('message_updated',       handleUpdated);
+    socket.on('message_status_update', handleStatusUpdate);
+    socket.on('messages_read_update',  handleReadUpdate);
+    socket.on('typing',                () => setIsTyping(true));
+    socket.on('stop_typing',           () => setIsTyping(false));
+    socket.on('chat_cleared',          (chatId) => {
+      if (chatId === chat?._id) setMessages([]);
+    });
+
+    return () => {
+      socket.off('receive_message',       handleReceive);
+      socket.off('message_updated',       handleUpdated);
+      socket.off('message_status_update', handleStatusUpdate);
+      socket.off('messages_read_update',  handleReadUpdate);
+      socket.off('typing');
+      socket.off('stop_typing');
+      socket.off('chat_cleared');
+    };
+  }, [socket, chat?._id]);
+
+  // Scroll to unread divider on load, otherwise scroll to bottom
+  useEffect(() => {
+    if (firstUnreadIdx >= 0 && unreadRef.current) {
+      unreadRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages.length === 0 ? 0 : messages[0]?._id]); // only on initial load
+
+  // Always scroll to bottom on new messages after initial load
+  useEffect(() => {
+    if (firstUnreadIdx === -1) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages.length]);
+  useEffect(() => { if (searchOpen) searchRef.current?.focus(); }, [searchOpen]);
+  useEffect(() => { if (replyTo || editMsg) inputRef.current?.focus(); }, [replyTo, editMsg]);
+
+  // Send or edit
+  const handleSend = async (e) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+
+    try {
+      if (editMsg) {
+        const { data } = await api.put(`/messages/${editMsg._id}/edit`, { text });
+        setMessages((prev) => prev.map((m) => (m._id === data._id ? data : m)));
+        socket?.emit('message_edited', data);
+        setEditMsg(null);
+      } else {
+        const { data } = await api.post('/messages', {
+          chatId: chat._id, receiverId: otherUser._id,
+          text, replyTo: replyTo?._id || null,
+        });
+        // If receiver is online, immediately show as delivered
+        const isReceiverOnline = onlineUsers?.includes(otherUser?._id);
+        const msgWithStatus = { ...data, status: isReceiverOnline ? 'delivered' : 'sent' };
+        setMessages((prev) => [...prev, msgWithStatus]);
+        socket?.emit('send_message', { ...data, chatId: chat._id });
+        onMessageSent?.({ ...data, chatId: chat._id });
+        setReplyTo(null);
+      }
+      socket?.emit('stop_typing', chat._id);
+      setText('');
+    } catch (err) { console.error(err); }
+  };
+
+  const handleTypingInput = (e) => {
+    setText(e.target.value);
+    if (!typing) { setTyping(true); socket?.emit('typing', { chatId: chat._id, username: user.username }); }
+    clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => { socket?.emit('stop_typing', chat._id); setTyping(false); }, 1500);
+  };
+
+  const handleEmojiClick = (emoji) => {
+    const input = inputRef.current;
+    if (!input) { setText((t) => t + emoji); return; }
+    const start = input.selectionStart;
+    const end   = input.selectionEnd;
+    const newText = text.slice(0, start) + emoji + text.slice(end);
+    setText(newText);
+    // Restore cursor after emoji
+    setTimeout(() => {
+      input.focus();
+      input.setSelectionRange(start + emoji.length, start + emoji.length);
+    }, 0);
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url  = URL.createObjectURL(file);
+    let type = 'file';
+    if (file.type.startsWith('image/')) type = 'image';
+    if (file.type.startsWith('video/')) type = 'video';
+    setMediaFiles([{ file, url, type, name: file.name }]);
+    e.target.value = '';
+  };
+
+  const handleMediaSend = async (files, caption) => {
+    const filesToSend = files || mediaFiles;
+    if (!filesToSend?.length) return;
+    try {
+      for (const item of filesToSend) {
+        const formData = new FormData();
+        formData.append('file', item.file);
+        const { data: uploadData } = await api.post('/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const { data } = await api.post('/messages', {
+          chatId: chat._id,
+          receiverId: otherUser._id,
+          text: caption || '',
+          replyTo: replyTo?._id || null,
+          mediaUrl:    uploadData.mediaUrl,
+          mediaType:   uploadData.mediaType,
+          mediaName:   uploadData.mediaName,
+          messageType: uploadData.mediaType,
+        });
+        setMessages((prev) => [...prev, data]);
+        socket?.emit('send_message', { ...data, chatId: chat._id });
+        onMessageSent?.({ ...data, chatId: chat._id });
+      }
+      setMediaFiles(null);
+      setReplyTo(null);
+      setText('');
+    } catch (err) { console.error(err); }
+  };
+
+  // Send poll
+  const handlePollSend = async (pollData) => {
+    try {
+      const { data } = await api.post('/messages', {
+        chatId: chat._id, receiverId: otherUser._id,
+        text: pollData.question, messageType: 'poll', poll: pollData,
+      });
+      setMessages((prev) => [...prev, data]);
+      socket?.emit('send_message', { ...data, chatId: chat._id });
+      onMessageSent?.({ ...data, chatId: chat._id });
+    } catch (err) { console.error(err); }
+  };
+
+  // Send contact
+  const handleContactSend = async (contactData) => {
+    try {
+      const { data } = await api.post('/messages', {
+        chatId: chat._id, receiverId: otherUser._id,
+        text: contactData.name, messageType: 'contact', contact: contactData,
+      });
+      setMessages((prev) => [...prev, data]);
+      socket?.emit('send_message', { ...data, chatId: chat._id });
+      onMessageSent?.({ ...data, chatId: chat._id });
+    } catch (err) { console.error(err); }
+  };
+
+  // Send event
+  const handleEventSend = async (eventData) => {
+    try {
+      const { data } = await api.post('/messages', {
+        chatId: chat._id, receiverId: otherUser._id,
+        text: eventData.title, messageType: 'event', event: eventData,
+      });
+      setMessages((prev) => [...prev, data]);
+      socket?.emit('send_message', { ...data, chatId: chat._id });
+      onMessageSent?.({ ...data, chatId: chat._id });
+    } catch (err) { console.error(err); }
+  };
+
+  // Vote on poll
+  const handleVotePoll = async (messageId, optionIndex) => {
+    try {
+      const { data } = await api.put(`/messages/${messageId}/vote`, { optionIndex });
+      setMessages((prev) => prev.map((m) => (m._id === messageId ? data : m)));
+      socket?.emit('message_updated', { ...data, chatId: chat._id });
+    } catch (err) { console.error(err); }
+  };
+
+  const handleAudioSend = async (blob) => {
+    setShowAudio(false);
+    try {
+      const file = new File([blob], 'voice-message.webm', { type: 'audio/webm' });
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data: uploadData } = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const { data } = await api.post('/messages', {
+        chatId: chat._id,
+        receiverId: otherUser._id,
+        text: '',
+        mediaUrl:    uploadData.mediaUrl,
+        mediaType:   'audio',
+        mediaName:   'Voice message',
+        messageType: 'audio',
+      });
+      setMessages((prev) => [...prev, data]);
+      socket?.emit('send_message', { ...data, chatId: chat._id });
+      onMessageSent?.({ ...data, chatId: chat._id });
+    } catch (err) { console.error(err); }
+  };
+
+  // Actions
+  const handleDelete = async (id, deleteFor = 'me') => {
+    try {
+      const { data } = await api.delete(`/messages/${id}`, { data: { deleteFor } });
+      if (data.deletedForEveryone) {
+        // Update message for both users via socket
+        setMessages((prev) => prev.map((m) => (m._id === id ? { ...m, isDeleted: true, text: 'This message was deleted' } : m)));
+        socket?.emit('message_deleted', { ...data, chatId: chat._id });
+      } else {
+        // Delete for me only — remove from local state
+        setMessages((prev) => prev.filter((m) => m._id !== id));
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  const handleStar = async (id) => {
+    const { data } = await api.put(`/messages/${id}/star`);
+    setMessages((prev) => prev.map((m) => (m._id === id ? { ...m, isStarred: data.isStarred } : m)));
+    socket?.emit('message_starred', data);
+  };
+
+  const handlePin = async (id) => {
+    const { data } = await api.put(`/messages/${id}/pin`);
+    setMessages((prev) => prev.map((m) => (m._id === id ? { ...m, isPinned: data.isPinned } : m)));
+    socket?.emit('message_pinned', data);
+    if (pinnedOpen) loadPinned();
+  };
+
+  const handleCopy = (txt) => navigator.clipboard.writeText(txt);
+
+  const handleChatMenuAction = async (action) => {
+    if (action === 'search') {
+      setSearchOpen(true);
+      setSearchTerm('');
+      setSearchIdx(0);
+    } else if (action === 'select') {
+      setSelectMode(true);
+    } else if (action === 'favourite') {
+      const { data } = await api.put(`/chats/${chat._id}/favourite`);
+      setIsFavourite(data.isFavourite);
+    } else if (action === 'clear') {
+      setConfirmDialog({
+        icon: <ClearConfirmIcon />,
+        title: 'Clear chat?',
+        message: `Clear all messages in your chat with ${otherUser?.username}?`,
+        confirmLabel: 'Clear chat',
+        confirmDanger: true,
+        hasStarredOption: true,
+        onConfirm: async (deleteStarred) => {
+          setConfirmDialog(null);
+          await api.put(`/chats/${chat._id}/clear`, { deleteStarred });
+          setMessages([]);
+          socket?.emit('chat_cleared', chat._id);
+        },
+      });
+    } else if (action === 'delete') {
+      setConfirmDialog({
+        icon: <DeleteConfirmIcon />,
+        title: 'Delete chat?',
+        message: `Delete your chat with ${otherUser?.username}? This chat will be removed from your chats list. They can still message you.`,
+        confirmLabel: 'Delete chat',
+        confirmDanger: true,
+        onConfirm: async () => {
+          setConfirmDialog(null);
+          await api.delete(`/chats/${chat._id}`);
+          onChatDeleted?.(chat._id);
+        },
+      });
+    }
+  };
+
+  const handleReply = (msg) => { setReplyTo(msg); setEditMsg(null); };
+
+  const handleEdit = (msg) => { setEditMsg(msg); setReplyTo(null); setText(msg.text); };
+
+  const handleForward = (msg) => setForwardMsg(msg);
+
+  const handleForwardSend = async (targetChat) => {
+    const { data } = await api.post('/messages', {
+      chatId: targetChat._id,
+      receiverId: targetChat.participants.find((p) => p._id !== user._id)?._id,
+      text: forwardMsg.text,
+    });
+    socket?.emit('send_message', { ...data, chatId: targetChat._id });
+    setForwardMsg(null);
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // Enter select mode from context menu — pre-select the tapped message
+  const handleSelectMessage = (id) => {
+    setSelectMode(true);
+    setSelectedIds(new Set([id]));
+  };
+
+  const handleDeleteSelected = async () => {
+    for (const id of selectedIds) await handleDelete(id, 'me');
+    setSelectedIds(new Set()); setSelectMode(false);
+  };
+
+  const loadPinned = async () => {
+    const { data } = await api.get(`/messages/${chat._id}/pinned/list`);
+    setPinnedMsgs(data);
+  };
+
+  const togglePinned = () => {
+    if (!pinnedOpen) loadPinned();
+    setPinnedOpen(!pinnedOpen);
+  };
+
+  // Search
+  const filteredIndexes = searchTerm.trim()
+    ? messages.reduce((acc, m, i) => {
+        if (!m.isDeleted && m.text.toLowerCase().includes(searchTerm.toLowerCase())) acc.push(i);
+        return acc;
+      }, [])
+    : [];
+
+  const handleSearchNav = (dir) => {
+    if (!filteredIndexes.length) return;
+    const next = (searchIdx + dir + filteredIndexes.length) % filteredIndexes.length;
+    setSearchIdx(next);
+    document.getElementById(`msg-${filteredIndexes[next]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  if (!chat) {
+    return (
+      <div className="chat-empty">
+        <div className="chat-empty-content">
+          <div className="empty-wa-logo">
+            <svg viewBox="0 0 24 24" width="72" height="72"><path fill="#00a884" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          </div>
+          <h2>WhatsApp Web</h2>
+          <p>Send and receive messages without keeping your phone online.</p>
+          <div className="empty-encrypted-note">
+            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+            <span>Your personal messages are end-to-end encrypted</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const pinnedCount = messages.filter((m) => m.isPinned).length;
+  const mediaMessages = messages.filter((m) => m.mediaUrl);
+
+  return (
+    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+    <div className={`chat-window${chat ? ' mobile-open' : ''}`}>
+      {/* Header */}
+      <div className="chat-header">
+        {selectMode ? (
+          <>
+            <button className="header-icon-btn" onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }} title="Cancel">
+              <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+            <span className="chat-header-name">{selectedIds.size} selected</span>
+            <div className="header-actions">
+              <button
+                className="header-icon-btn"
+                onClick={() => { const msg = messages.find(m => selectedIds.has(m._id)); if (msg) handleForward(msg); }}
+                disabled={selectedIds.size !== 1}
+                title="Forward"
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1 1-5 4-10 11-11z"/></svg>
+              </button>
+              <button
+                className="header-icon-btn danger"
+                onClick={handleDeleteSelected}
+                disabled={!selectedIds.size}
+                title="Delete"
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Mobile back button */}
+            <button className="header-icon-btn mobile-back-btn" onClick={onMobileBack} title="Back">
+              <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            </button>
+            <div className="chat-header-avatar" onClick={() => setShowContactInfo(true)}>
+              {otherUser?.avatar
+                ? <img src={`http://localhost:5000${otherUser.avatar}`} alt={otherUser.username} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                : <DefaultAvatar />
+              }
+            </div>
+            <div className="chat-header-info" onClick={() => setShowContactInfo(true)}>
+              <span className="chat-header-name">{otherUser?.username}</span>
+              {isTyping
+                ? <span className="chat-header-typing">typing...</span>
+                : <span className="chat-header-status">
+                    {onlineUsers?.includes(otherUser?._id)
+                      ? 'online'
+                      : lastSeenMap?.[otherUser?._id]
+                        ? formatLastSeen(lastSeenMap[otherUser._id])
+                        : 'last seen recently'
+                    }
+                  </span>
+              }
+            </div>            <div className="header-actions" style={{ position: 'relative' }}>
+              {pinnedCount > 0 && (
+                <button className={`header-icon-btn ${pinnedOpen ? 'active' : ''}`} onClick={togglePinned} title="Pinned messages">
+                  <PinHeaderIcon /> <span className="pin-count">{pinnedCount}</span>
+                </button>
+              )}
+              <button className={`header-icon-btn ${searchOpen ? 'active' : ''}`}
+                onClick={() => { setSearchOpen(!searchOpen); setSearchTerm(''); setSearchIdx(0); }}
+                title="Search">
+                <SearchHeaderIcon />
+              </button>
+              <button className={`header-icon-btn ${showChatMenu ? 'active' : ''}`} title="Menu" onClick={() => setShowChatMenu(!showChatMenu)}>
+                <MenuHeaderIcon />
+              </button>
+              {showChatMenu && (
+                <ChatMenu
+                  chat={chat}
+                  isFavourite={isFavourite}
+                  onClose={() => setShowChatMenu(false)}
+                  onAction={handleChatMenuAction}
+                />
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Pinned messages panel */}
+      {pinnedOpen && (
+        <div className="pinned-panel">
+          <div className="pinned-panel-header">
+            <span>📌 Pinned Messages ({pinnedMsgs.length})</span>
+            <button onClick={() => setPinnedOpen(false)}>✕</button>
+          </div>
+          {pinnedMsgs.length === 0
+            ? <p className="pinned-empty">No pinned messages</p>
+            : pinnedMsgs.map((m) => (
+              <div key={m._id} className="pinned-item">
+                <span className="pinned-sender">{m.senderId?.username}</span>
+                <span className="pinned-text">{m.text}</span>
+                <button onClick={() => handlePin(m._id)} title="Unpin">✕</button>
+              </div>
+            ))
+          }
+        </div>
+      )}
+
+      {/* Search bar */}
+      {searchOpen && (
+        <div className="chat-search-bar">
+          <input ref={searchRef} value={searchTerm}
+            onChange={(e) => { setSearchTerm(e.target.value); setSearchIdx(0); }}
+            placeholder="Search messages..." />
+          <span className="search-count">
+            {filteredIndexes.length > 0 ? `${searchIdx + 1} / ${filteredIndexes.length}` : searchTerm ? '0 results' : ''}
+          </span>
+          <button onClick={() => handleSearchNav(-1)} disabled={!filteredIndexes.length}>↑</button>
+          <button onClick={() => handleSearchNav(1)}  disabled={!filteredIndexes.length}>↓</button>
+          <button onClick={() => { setSearchOpen(false); setSearchTerm(''); }}>✕</button>
+        </div>
+      )}
+
+      {/* Messages */}
+      <div className="messages-container">
+        {messages.map((msg, i) => {
+          const msgDate = new Date(msg.createdAt);
+          const prevDate = i > 0 ? new Date(messages[i - 1].createdAt) : null;
+          const showDate = !prevDate || msgDate.toDateString() !== prevDate.toDateString();
+
+          return (
+            <div id={`msg-${i}`} key={msg._id}>
+              {/* Date divider */}
+              {showDate && (
+                <div className="date-divider">
+                  <span>{formatDateDivider(msgDate)}</span>
+                </div>
+              )}
+              {/* Unread divider */}
+              {i === firstUnreadIdx && (
+                <div ref={unreadRef} className="unread-divider">
+                  <span>
+                    {messages.length - firstUnreadIdx} unread message{messages.length - firstUnreadIdx > 1 ? 's' : ''}
+                  </span>
+                </div>
+              )}
+              <MessageBubble
+              message={msg}
+              isOwn={msg.senderId?._id?.toString() === user._id?.toString() || msg.senderId?.toString() === user._id?.toString()}
+              searchTerm={searchTerm}
+              isSelected={selectMode ? selectedIds.has(msg._id) : undefined}
+              onSelect={selectMode ? toggleSelect : handleSelectMessage}
+              onReply={handleReply}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onStar={handleStar}
+              onPin={handlePin}
+              onForward={handleForward}
+              onCopy={handleCopy}
+              currentUserId={user._id}
+              onVote={handleVotePoll}
+            />
+            </div>
+          );
+        })}
+        {isTyping && <div className="typing-indicator"><span /><span /><span /></div>}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Reply / Edit bar */}
+      {(replyTo || editMsg) && (
+        <div className="compose-context-bar">
+          <div className="compose-context-bar-line" />
+          <div className="compose-context-info">
+            <span className="compose-context-label">{editMsg ? '✏️ Editing' : `↩️ Replying to ${replyTo?.senderId?.username}`}</span>
+            <span className="compose-context-text">{editMsg ? editMsg.text : replyTo?.text}</span>
+          </div>
+          <button onClick={() => { setReplyTo(null); setEditMsg(null); setText(''); }}>✕</button>
+        </div>
+      )}
+
+      {/* Media preview bar — replaced by full-screen modal */}
+
+      {/* Input bar */}
+      <div className="message-input-bar">
+        {showAudio ? (
+          <AudioRecorder onSend={handleAudioSend} onCancel={() => setShowAudio(false)} />
+        ) : (
+          <>
+            {showEmoji && <EmojiPickerPanel onEmojiClick={handleEmojiClick} onClose={() => setShowEmoji(false)} />}
+
+            {/* Attach menu */}
+            {showAttach && (
+              <AttachMenu
+                onClose={() => setShowAttach(false)}
+                onFileSelect={(e, type) => {
+                  const newFiles = Array.from(e.target.files || []).map((f) => ({
+                    file: f,
+                    url:  URL.createObjectURL(f),
+                    type: type === 'audio' ? 'audio' : f.type.startsWith('image/') ? 'image' : f.type.startsWith('video/') ? 'video' : 'file',
+                    name: f.name,
+                  }));
+                  if (newFiles.length) setMediaFiles(newFiles);
+                }}
+                onPoll={() => setShowPoll(true)}
+                onContact={() => setShowContact(true)}
+                onEvent={() => setShowEvent(true)}
+                onCamera={() => {}}
+              />
+            )}
+
+            {/* + button outside left */}
+            <button className="input-plus-btn" onClick={() => { setShowAttach(!showAttach); setShowEmoji(false); }} title="Attach" type="button">
+              <PlusIcon />
+            </button>
+
+            {/* Pill: emoji | input | attach + mic */}
+            <form className="input-pill" onSubmit={handleSend}>
+              <button className={`input-icon-btn ${showEmoji ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setShowEmoji(!showEmoji); }} title="Emoji" type="button">
+                <EmojiIcon />
+              </button>
+              <input ref={inputRef} value={text} onChange={handleTypingInput} onFocus={() => setShowEmoji(false)} placeholder={editMsg ? 'Edit message...' : 'Type a message'} autoFocus />
+              <div className="input-right-icons">
+                {!text.trim() && (
+                  <button className="input-icon-btn" type="button" onClick={() => setShowAudio(true)} title="Voice message">
+                    <MicIcon />
+                  </button>
+                )}
+              </div>
+            </form>
+
+            {/* Send — green circle outside right */}
+            {text.trim() && (
+              <button className="send-btn" onClick={handleSend} type="button">
+                <SendIcon />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Forward modal */}
+      {forwardMsg && (
+        <ForwardModal
+          forwardMsg={forwardMsg}
+          onClose={() => setForwardMsg(null)}
+          onSend={handleForwardSend}
+          userId={user._id}
+        />
+      )}
+
+      {/* Poll / Contact / Event modals */}
+      {showPoll    && <PollModal    onClose={() => setShowPoll(false)}    onSend={handlePollSend} />}
+      {showContact && <ContactModal onClose={() => setShowContact(false)} onSend={handleContactSend} />}
+      {showEvent   && <EventModal   onClose={() => setShowEvent(false)}   onSend={handleEventSend} />}
+
+      {/* Confirm dialog */}
+      {confirmDialog && (
+        <ClearDeleteDialog
+          dialog={confirmDialog}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+    </div>
+
+    {/* Media preview — covers chat area only (not sidebar) */}
+    {mediaFiles && (
+      <MediaPreviewModal
+        files={mediaFiles}
+        onSend={handleMediaSend}
+        onClose={() => setMediaFiles(null)}
+      />
+    )}
+
+    {/* Contact info panel — slides in from right */}
+    {showContactInfo && (
+      <ContactInfo
+        contact={otherUser}
+        isOnline={onlineUsers?.includes(otherUser?._id)}
+        lastSeen={lastSeenMap?.[otherUser?._id]}
+        mediaMessages={mediaMessages}
+        onClose={() => setShowContactInfo(false)}
+        onClearChat={() => { setShowContactInfo(false); handleChatMenuAction('clear'); }}
+        onDeleteChat={() => { setShowContactInfo(false); handleChatMenuAction('delete'); }}
+      />
+    )}
+    </div>
+  );
+}
+
+// Forward modal — pick a chat to forward to
+function ForwardModal({ forwardMsg, onClose, onSend, userId }) {
+  const [chats, setChats] = useState([]);
+  useEffect(() => { api.get('/chats').then((r) => setChats(r.data)); }, []);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <span>➡️ Forward Message</span>
+          <button onClick={onClose}>✕</button>
+        </div>
+        <p className="modal-preview">"{forwardMsg.text}"</p>
+        <div className="modal-list">
+          {chats.map((c) => {
+            const other = c.participants.find((p) => p._id !== userId);
+            return (
+              <div key={c._id} className="modal-item" onClick={() => onSend(c)}>
+                <div className="modal-avatar"><DefaultAvatar /></div>
+                <span>{other?.username}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Icons used in input bar
+const EmojiIcon  = () => <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>;
+const AttachIcon = () => <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>;
+const MicIcon    = () => <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>;
+const SendIcon   = () => <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817-.011 7.912z"/></svg>;
+
+const PlusIcon        = () => <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>;const PinHeaderIcon   = () => <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>;
+const SearchHeaderIcon = () => <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>;
+const MenuHeaderIcon  = () => <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>;
+
+function formatDateDivider(date) {
+  const now = new Date();
+  const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === now.toDateString()) return 'Today';
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return date.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+const ClearConfirmIcon  = () => <svg viewBox="0 0 24 24" width="28" height="28"><path fill="#f15c6d" d="M5 13h14v-2H5v2zm-2 4h14v-2H3v2zM7 7v2h14V7H7z"/></svg>;
+const DeleteConfirmIcon = () => <svg viewBox="0 0 24 24" width="28" height="28"><path fill="#f15c6d" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>;
+
+// Inline dialog for clear/delete chat with optional starred checkbox
+function ClearDeleteDialog({ dialog, onCancel }) {
+  const [deleteStarred, setDeleteStarred] = useState(false);
+
+  return (
+    <div className="confirm-overlay" onClick={onCancel}>
+      <div className="confirm-card" onClick={(e) => e.stopPropagation()}>
+        <div className="confirm-icon">{dialog.icon}</div>
+        <h3 className="confirm-title">{dialog.title}</h3>
+        <p className="confirm-message">{dialog.message}</p>
+
+        {dialog.hasStarredOption && (
+          <label className="confirm-checkbox-row">
+            <input
+              type="checkbox"
+              checked={deleteStarred}
+              onChange={(e) => setDeleteStarred(e.target.checked)}
+            />
+            <span>Also delete starred messages</span>
+          </label>
+        )}
+
+        <div className="confirm-actions">
+          <button className="confirm-btn cancel" onClick={onCancel}>Cancel</button>
+          <button
+            className="confirm-btn danger"
+            onClick={() => dialog.onConfirm(deleteStarred)}
+          >
+            {dialog.confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

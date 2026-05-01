@@ -1,0 +1,97 @@
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 700;
+  animation: overlayIn var(--t-fast);
+}
+
+.confirm-card {
+  background: var(--bg-panel);
+  border-radius: var(--radius-lg);
+  width: 320px;
+  padding: 28px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow-lg);
+  animation: cardIn var(--t-base);
+  text-align: center;
+}
+
+.confirm-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: var(--red-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.confirm-title {
+  color: var(--text-primary);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  margin: 0;
+}
+
+.confirm-message {
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  margin: 0;
+  line-height: 1.55;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.confirm-btn {
+  flex: 1;
+  padding: 11px 0;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-fast), opacity var(--t-fast);
+  font-family: var(--font);
+}
+
+.confirm-btn.cancel  { background: var(--bg-input); color: var(--text-primary); }
+.confirm-btn.cancel:hover { background: var(--border-mid); }
+
+.confirm-btn.primary { background: var(--green); color: #fff; }
+.confirm-btn.primary:hover { background: var(--green-dark); }
+
+.confirm-btn.danger  { background: var(--red); color: #fff; }
+.confirm-btn.danger:hover { background: #d94f5e; }
+
+.confirm-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  cursor: pointer;
+  padding: 4px 0;
+  width: 100%;
+  text-align: left;
+}
+
+.confirm-checkbox-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--green);
+  cursor: pointer;
+  flex-shrink: 0;
+}

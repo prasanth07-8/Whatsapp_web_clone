@@ -1,0 +1,269 @@
+/* ═══════════════════════════════════════════════════
+   WhatsApp Web Clone — Global Design System
+   ═══════════════════════════════════════════════════ */
+
+/* ── CSS Variables ─────────────────────────────────── */
+:root {
+  /* Backgrounds — exact WhatsApp dark theme values */
+  --bg-deep:    #111b21;   /* app background / sidebar bg */
+  --bg-panel:   #202c33;   /* header, input bar, panels */
+  --bg-input:   #2a3942;   /* search / input fields */
+  --bg-hover:   #2a3942;
+  --bg-active:  #2a3942;
+  --bg-subtle:  #1e2b33;
+  --bg-chat:    #0b141a;   /* chat background */
+  --bg-msg-in:  #202c33;   /* incoming bubble */
+  --bg-msg-out: #005c4b;   /* outgoing bubble */
+
+  /* Borders */
+  --border:     #2a3942;
+  --border-mid: #3b4a54;
+
+  /* Text */
+  --text-primary:   #e9edef;
+  --text-secondary: #8696a0;
+  --text-time:      #8696a0;
+
+  /* Accent */
+  --green:      #00a884;   /* WhatsApp teal */
+  --green-dark: #017561;
+  --green-bg:   rgba(0,168,132,0.1);
+  --blue-tick:  #53bdeb;   /* read receipt blue */
+  --red:        #f15c6d;
+  --red-bg:     rgba(241,92,109,0.08);
+
+  /* Typography */
+  --font:       'Segoe UI', system-ui, -apple-system, sans-serif;
+  --text-xs:    0.6875rem;  /* 11px */
+  --text-sm:    0.75rem;    /* 12px */
+  --text-base:  0.875rem;   /* 14px */
+  --text-md:    0.9375rem;  /* 15px — WhatsApp body */
+  --text-lg:    1rem;       /* 16px */
+  --text-xl:    1.125rem;   /* 18px */
+
+  /* Radius */
+  --radius-sm:  4px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  --radius-pill:24px;
+  --radius-full:50%;
+
+  /* Transitions */
+  --t-fast:  0.12s ease;
+  --t-base:  0.18s ease;
+  --t-slow:  0.25s ease;
+
+  /* Shadows */
+  --shadow-sm:  0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.4);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.5);
+}
+
+/* ── Reset ─────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html { font-size: 16px; }
+
+body {
+  font-family: var(--font);
+  font-size: var(--text-md);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ── Scrollbars ────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-mid);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: #4a5a64; }
+
+/* ── Focus ─────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* ── Selection ─────────────────────────────────────── */
+::selection {
+  background: rgba(0,168,132,0.25);
+  color: var(--text-primary);
+}
+
+/* ── Utility ───────────────────────────────────────── */
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Mobile viewport fix ───────────────────────────── */
+html, body {
+  height: 100%;
+  height: -webkit-fill-available;
+}
+
+/* ── Tablet (≤ 1024px) ─────────────────────────────── */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 280px;
+    min-width: 240px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   MOBILE (≤ 640px) — WhatsApp Web mobile layout
+   Full-screen list → tap → full-screen chat (slide in)
+   ═══════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+
+  /* ── App shell: stack vertically, full height ── */
+  .chat-page-root {
+    position: relative;
+    overflow: hidden;
+    height: 100dvh !important;
+  }
+
+  /* ── Hide nav rail entirely on mobile ── */
+  .nav-rail {
+    display: none !important;
+  }
+
+  /* ── Sidebar: full screen ── */
+  .sidebar {
+    width: 100vw !important;
+    min-width: unset !important;
+    height: 100dvh !important;
+    border-right: none !important;
+    position: relative;
+    z-index: 10;
+  }
+
+  /* Profile panel inside sidebar: full screen */
+  .profile-panel,
+  .starred-panel {
+    width: 100vw !important;
+    left: 0 !important;
+  }
+
+  /* ── Chat window: slides in over sidebar ── */
+  .chat-window {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 20;
+  }
+
+  .chat-window.mobile-open {
+    transform: translateX(0) !important;
+  }
+
+  /* Hide empty state on mobile (no split view) */
+  .chat-empty {
+    display: none !important;
+  }
+
+  /* ── Show mobile back button in chat header ── */
+  .mobile-back-btn {
+    display: flex !important;
+  }
+
+  /* ── Sidebar header: tighter ── */
+  .sidebar-header {
+    padding: 0 12px !important;
+    min-height: 56px !important;
+  }
+
+  .sidebar-title {
+    font-size: 1.1rem !important;
+  }
+
+  /* ── Search bar ── */
+  .sidebar-search {
+    padding: 6px 10px !important;
+  }
+
+  /* ── Chat header ── */
+  .chat-header {
+    padding: 0 8px !important;
+    min-height: 56px !important;
+    gap: 8px !important;
+  }
+
+  /* ── Message bubbles: wider on mobile ── */
+  .bubble {
+    max-width: 82vw !important;
+  }
+
+  /* ── Input bar ── */
+  .message-input-bar {
+    padding: 6px 8px !important;
+  }
+
+  /* ── Modals: bottom sheet style ── */
+  .modal-overlay {
+    align-items: flex-end !important;
+  }
+
+  .modal-sheet {
+    width: 100vw !important;
+    max-height: 92dvh !important;
+    border-radius: 16px 16px 0 0 !important;
+  }
+
+  /* ── Emoji picker ── */
+  .emoji-picker-panel {
+    width: 100vw !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 58px !important;
+  }
+
+  /* ── Attach menu ── */
+  .attach-menu {
+    left: 4px !important;
+    bottom: 58px !important;
+  }
+
+  /* ── Contact info panel ── */
+  .contact-info-panel {
+    width: 100vw !important;
+  }
+
+  /* ── Media panel ── */
+  .media-grid { gap: 1px !important; }
+
+  /* ── Voters sheet ── */
+  .voters-sheet { max-height: 80dvh !important; }
+
+  /* ── Login page: full screen card ── */
+  .login-box {
+    padding: 32px 20px !important;
+    border-radius: 0 !important;
+    min-height: 100dvh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    max-width: 100% !important;
+  }
+
+  /* ── Tooltips: off on mobile ── */
+  .nav-btn::after,
+  .nav-avatar::after { display: none !important; }
+
+  /* ── Scrollbars: thinner on mobile ── */
+  ::-webkit-scrollbar { width: 3px; }
+}

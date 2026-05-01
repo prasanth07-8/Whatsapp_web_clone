@@ -1,0 +1,86 @@
+.audio-recorder {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  padding: 0 4px;
+}
+
+.ar-cancel {
+  background: none;
+  border: none;
+  color: #f15c6d;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  border-radius: 50%;
+  transition: background 0.15s;
+}
+.ar-cancel:hover { background: rgba(241,92,109,0.1); }
+
+.ar-recording {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.ar-dot {
+  width: 10px;
+  height: 10px;
+  background: #f15c6d;
+  border-radius: 50%;
+  animation: pulse 1s infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.ar-timer {
+  color: #e9edef;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
+
+.ar-stop {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #f15c6d;
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.ar-stop:hover { background: #d94f5e; }
+
+.ar-preview {
+  flex: 1;
+  height: 36px;
+  accent-color: #00a884;
+}
+
+.ar-send {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #00a884;
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.ar-send:hover { background: #017561; }
