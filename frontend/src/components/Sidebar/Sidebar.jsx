@@ -45,6 +45,7 @@ export default function Sidebar({
   const [chatFilter, setChatFilter]       = useState('all'); // 'all' | 'unread' | 'favourites'
   const [ctxMenu, setCtxMenu]             = useState(null); // { chat, x, y }
   const [confirmAction, setConfirmAction] = useState(null); // { type, chat }
+  const [archiveToast, setArchiveToast]   = useState(null); // { chatId, chatName, timer }
   const [navTab, setNavTab]               = useState('chats');
   const sideMenuRef = useRef(null);
   const searchRef   = useRef(null);
@@ -85,6 +86,15 @@ export default function Sidebar({
       } else if (action === 'archive') {
         const { data } = await api.put(`/chats/${chat._id}/archive`);
         onChatUpdated?.(chat._id, { isArchived: data.isArchived });
+        // Show undo toast only when archiving (not unarchiving)
+        if (data.isArchived) {
+          // Clear any existing timer
+          if (archiveToast?.timer) clearTimeout(archiveToast.timer);
+          const other = chat.participants.find((p) => p._id !== user._id);
+          const chatName = chat.isSavedMessages ? `${user.username} (You)` : other?.username || 'Chat';
+          const timer = setTimeout(() => setArchiveToast(null), 3000);
+          setArchiveToast({ chatId: chat._id, chatName, timer });
+        }
       } else if (action === 'favourite') {
         const { data } = await api.put(`/chats/${chat._id}/favourite`);
         onChatUpdated?.(chat._id, { isFavourite: data.isFavourite });
@@ -142,6 +152,12 @@ export default function Sidebar({
   const totalUnread = Object.values(unreadCounts || {}).reduce((s, n) => s + n, 0);
 
   const filteredChats = chats.filter((chat) => {
+    // Saved messages: respect archive state like any other chat
+    if (chat.isSavedMessages) {
+      if (chat.isArchived && chatFilter !== 'archived') return false;
+      if (chatFilter === 'archived') return chat.isArchived;
+      return chatFilter === 'all' && !q;
+    }
     // Always hide archived chats from main list (unless viewing archived)
     if (chat.isArchived && chatFilter !== 'archived') return false;
     // In archived view, only show archived
@@ -373,7 +389,7 @@ export default function Sidebar({
                             <span className={`chat-time ${unread > 0 ? 'chat-time-unread' : ''}`}>{time}</span>
                           </div>
                           <div className="chat-row-bottom">
-                            <span className={`chat-last ${unread > 0 ? 'chat-last-unread' : ''}`}>{getLastMsgPreview(chat.lastMessage)}</span>
+                            <span className={`chat-last ${unread > 0 ? 'chat-last-unread' : ''}`}>{getLastMsgPreview(chat.lastMessage, user._id)}</span>
                             {unread > 0 && <span className="unread-badge">{unread > 99 ? '99+' : unread}</span>}
                           </div>
                         </div>
@@ -413,33 +429,56 @@ export default function Sidebar({
             /* ── Normal chat list ── */
             <div className="sidebar-list">
               {/* Archived chats row — shown at TOP like WhatsApp */}
-              {chatFilter === 'all' && !q && archivedCount > 0 && (
-                <div className="archived-row" onClick={() => setChatFilter('archived')}>
-                  <div className="archived-row-icon"><ArchiveIcon /></div>
-                  <div className="archived-row-info">
-                    <span className="archived-row-label">Archived</span>
-                    <span className="archived-row-count">{archivedCount}</span>
+              {chatFilter === 'all' && !q && archivedCount > 0 && (() => {
+                // Count unread messages across all archived chats
+                const archivedUnread = chats
+                  .filter((c) => c.isArchived)
+                  .reduce((sum, c) => sum + (unreadCounts?.[c._id] || 0), 0);
+                return (
+                  <div className="archived-row" onClick={() => setChatFilter('archived')}>
+                    <div className="archived-row-icon"><ArchiveIcon /></div>
+                    <div className="archived-row-info">
+                      <span className="archived-row-label">Archived</span>
+                      {archivedUnread > 0 && (
+                        <span className="archived-row-unread">{archivedUnread > 99 ? '99+' : archivedUnread}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {filteredChats.map((chat) => {
-                const other    = chat.participants.find((p) => p._id !== user._id);
+                const isSaved  = chat.isSavedMessages;
+                const other    = isSaved ? null : chat.participants.find((p) => p._id !== user._id);
                 const unread   = unreadCounts?.[chat._id] || 0;
-                const isOnline = onlineUsers.includes(other?._id);
+                const isOnline = !isSaved && onlineUsers.includes(other?._id);
                 const lastMsg  = chat.lastMessage;
                 const timeVal  = chat.updatedAt || chat.lastMessage?.createdAt;
                 const time     = timeVal ? formatChatTime(new Date(timeVal)) : '';
-                const isTyping = typingChats?.[chat._id];
+                const isTyping = !isSaved && typingChats?.[chat._id];
+
                 return (
-                  <div key={chat._id} className={`chat-item ${activeChat?._id === chat._id ? 'active' : ''} ${chat.isPinned ? 'chat-item-pinned' : ''}`} onClick={() => onSelectChat(chat)} onContextMenu={(e) => openCtxMenu(e, chat)}>
+                  <div
+                    key={chat._id}
+                    className={`chat-item ${activeChat?._id === chat._id ? 'active' : ''} ${chat.isPinned ? 'chat-item-pinned' : ''} ${isSaved ? 'chat-item-saved' : ''}`}
+                    onClick={() => onSelectChat(chat)}
+                    onContextMenu={(e) => openCtxMenu(e, chat)}
+                  >
                     <div className="chat-avatar">
-                      {other?.avatar ? <img src={`${BASE}${other.avatar}`} alt={other.username} className="chat-avatar-img" /> : <DefaultAvatar />}
+                      {isSaved ? (
+                        user?.avatar
+                          ? <img src={`${BASE}${user.avatar}`} alt={user.username} className="chat-avatar-img" />
+                          : <DefaultAvatar />
+                      ) : other?.avatar ? (
+                        <img src={`${BASE}${other.avatar}`} alt={other.username} className="chat-avatar-img" />
+                      ) : (
+                        <DefaultAvatar />
+                      )}
                       {isOnline && <span className="online-dot" />}
                     </div>
                     <div className="chat-info">
                       <div className="chat-row-top">
-                        <span className="chat-name">{other?.username}</span>
+                        <span className="chat-name">{isSaved ? `${user.username} (You)` : other?.username}</span>
                         <div className="chat-row-top-right">
                           {chat.isPinned && <PinCtxIcon />}
                           <span className={`chat-time ${unread > 0 ? 'chat-time-unread' : ''}`}>{time}</span>
@@ -449,7 +488,9 @@ export default function Sidebar({
                         {isTyping ? (
                           <span className="chat-last chat-typing-label">typing...</span>
                         ) : (
-                          <span className={`chat-last ${unread > 0 ? 'chat-last-unread' : ''}`}>{getLastMsgPreview(lastMsg)}</span>
+                          <span className={`chat-last ${unread > 0 ? 'chat-last-unread' : ''}`}>
+                            {getLastMsgPreview(lastMsg, user._id)}
+                          </span>
                         )}
                         {unread > 0 && !isTyping && <span className="unread-badge">{unread > 99 ? '99+' : unread}</span>}
                       </div>
@@ -657,13 +698,38 @@ export default function Sidebar({
           </div>
         </div>
       )}
+
+      {/* ── Archive undo toast — slides up from bottom of sidebar ── */}
+      {archiveToast && (
+        <div className="archive-toast">
+          <svg viewBox="0 0 24 24" width="20" height="20" style={{flexShrink:0}}>
+            <circle cx="12" cy="12" r="10" fill="none" stroke="#00a884" strokeWidth="1.8"/>
+            <path d="M7.5 12l3 3 6-6" stroke="#00a884" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+          </svg>
+          <span className="archive-toast-text">Chat archived</span>
+          <button
+            className="archive-toast-undo"
+            onClick={async () => {
+              clearTimeout(archiveToast.timer);
+              setArchiveToast(null);
+              const { data } = await api.put(`/chats/${archiveToast.chatId}/archive`);
+              onChatUpdated?.(archiveToast.chatId, { isArchived: data.isArchived });
+            }}
+          >
+            Undo
+          </button>
+        </div>
+      )}
     </>
   );
 }
 
-function getLastMsgPreview(msg) {
+function getLastMsgPreview(msg, currentUserId) {
   if (!msg) return 'No messages yet';
-  if (msg.isDeleted) return 'This message was deleted';
+  if (msg.isDeleted) {
+    const senderId = msg.senderId?._id?.toString() || msg.senderId?.toString();
+    return senderId === currentUserId?.toString() ? 'You deleted this message' : 'This message was deleted';
+  }
   const type = msg.messageType || 'text';
   if (type === 'poll')    return '📊 Poll';
   if (type === 'event')   return '📅 Event';
@@ -686,6 +752,11 @@ function formatChatTime(date) {
 
 // Icons
 const SearchIcon      = () => <svg viewBox="0 0 24 24" width="16" height="16"><path fill="#8696a0" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>;
+const SavedMsgIcon    = () => (
+  <svg viewBox="0 0 24 24" width="26" height="26">
+    <path fill="#fff" d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/>
+  </svg>
+);
 const CloseIcon       = () => <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>;
 const MenuIcon        = () => <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>;
 const BackIcon        = () => <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>;

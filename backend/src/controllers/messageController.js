@@ -20,7 +20,8 @@ exports.sendMessage = async (req, res) => {
       return res.status(400).json({ message: 'Message must have text or media' });
 
     const message = await Message.create({
-      chatId, senderId: req.userId, receiverId,
+      chatId, senderId: req.userId,
+      receiverId: receiverId || req.userId, // self-chat: receiverId = senderId
       text: text?.trim() || '',
       replyTo: replyTo || null,
       mediaUrl:    mediaUrl    || null,
@@ -99,6 +100,18 @@ exports.deleteMessage = async (req, res) => {
       msg.isDeleted = true;
       msg.text = 'This message was deleted';
       await msg.save();
+
+      // Update chat.lastMessage to the most recent non-deleted message
+      const prevMsg = await Message.findOne({
+        chatId: msg.chatId,
+        isDeleted: false,
+        _id: { $ne: msg._id },
+      }).sort({ createdAt: -1 });
+      await Chat.findByIdAndUpdate(msg.chatId, {
+        lastMessage: prevMsg ? prevMsg._id : null,
+        updatedAt: Date.now(),
+      });
+
       const populated = await populate(Message.findById(msg._id));
       return res.json({ ...populated.toObject(), deletedForEveryone: true });
     }
@@ -228,6 +241,45 @@ exports.getAllMedia = async (req, res) => {
       .limit(200);
 
     res.json(messages);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// React to a message (toggle: add if not present, remove if same emoji already set)
+exports.reactToMessage = async (req, res) => {
+  try {
+    const { emoji } = req.body;
+    if (!emoji) return res.status(400).json({ message: 'emoji required' });
+
+    const msg = await Message.findById(req.params.id);
+    if (!msg) return res.status(404).json({ message: 'Message not found' });
+    if (msg.isDeleted) return res.status(400).json({ message: 'Cannot react to deleted message' });
+
+    if (!msg.reactions) msg.reactions = [];
+
+    const existing = msg.reactions.find(
+      (r) => r.userId.toString() === req.userId
+    );
+
+    if (existing) {
+      if (existing.emoji === emoji) {
+        // Same emoji — remove (toggle off)
+        msg.reactions = msg.reactions.filter(
+          (r) => r.userId.toString() !== req.userId
+        );
+      } else {
+        // Different emoji — replace
+        existing.emoji = emoji;
+      }
+    } else {
+      // New reaction
+      msg.reactions.push({ emoji, userId: req.userId });
+    }
+
+    await msg.save();
+    const populated = await populate(Message.findById(msg._id));
+    res.json(populated);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

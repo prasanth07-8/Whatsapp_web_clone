@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './LoginPage.css';
@@ -6,6 +6,8 @@ import './LoginPage.css';
 export default function LoginPage() {
   const { login, register } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => { document.title = 'WhatsApp'; }, []);
 
   const [isRegister, setIsRegister] = useState(false);
   const [form, setForm] = useState({ username: '', email: '', password: '' });

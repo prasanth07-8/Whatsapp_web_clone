@@ -20,6 +20,12 @@ export default function ChatPage() {
 
   useEffect(() => { activeChatRef.current = activeChat; }, [activeChat]);
 
+  // Update browser tab title with unread count — like WhatsApp Web
+  useEffect(() => {
+    const total = Object.values(unreadCounts).reduce((s, n) => s + n, 0);
+    document.title = total > 0 ? `(${total > 99 ? '99+' : total}) WhatsApp` : 'WhatsApp';
+  }, [unreadCounts]);
+
   // Join all chat rooms whenever chats list changes and socket is ready
   // This ensures we receive messages for all chats even without opening them
   useEffect(() => {
@@ -109,30 +115,26 @@ export default function ChatPage() {
       const chatId = msg.chatId;
       if (!chatId) return;
 
+      if (msg.isDeleted) {
+        // Deleted for everyone: re-fetch the chat to get the updated lastMessage
+        // (backend now sets lastMessage to the previous non-deleted message)
+        api.get('/chats').then((res) => {
+          const updatedChat = res.data.find((c) => c._id === chatId);
+          if (updatedChat) {
+            setChats((prev) => prev.map((c) => c._id === chatId ? { ...c, lastMessage: updatedChat.lastMessage, updatedAt: updatedChat.updatedAt } : c));
+          }
+        });
+        return;
+      }
+
+      // Edited message — update text in sidebar if it's the last message
       setChats((prev) => {
         const chat = prev.find((c) => c._id === chatId);
         if (!chat) return prev;
-
-        const lastMsg = chat.lastMessage;
-        // Check if the updated message is the one shown in the sidebar
-        // Match by _id (if stored) or by text+timestamp as fallback
-        const isLastMsg = lastMsg?._id?.toString() === msg._id?.toString()
-          || (!lastMsg?._id && lastMsg?.text === msg.text && !msg.isDeleted === false);
-
-        if (!isLastMsg && !msg.isDeleted) return prev;
-
-        // If deleted, always update to show "This message was deleted"
-        // If edited, update text
+        const isLastMsg = chat.lastMessage?._id?.toString() === msg._id?.toString();
+        if (!isLastMsg) return prev;
         return prev.map((c) => c._id === chatId
-          ? {
-              ...c,
-              lastMessage: {
-                ...c.lastMessage,
-                _id: msg._id,
-                text: msg.isDeleted ? 'This message was deleted' : (msg.text || c.lastMessage?.text),
-                isDeleted: msg.isDeleted || false,
-              },
-            }
+          ? { ...c, lastMessage: { ...c.lastMessage, text: msg.text } }
           : c
         );
       });
@@ -157,7 +159,6 @@ export default function ChatPage() {
   useEffect(() => {
     api.get('/users').then((res) => {
       setUsers(res.data);
-      // Build lastSeen map — only set if lastSeen is not null (null means was online recently, no data yet)
       const map = {};
       res.data.forEach((u) => {
         if (u.lastSeen) map[u._id] = u.lastSeen;
@@ -165,13 +166,22 @@ export default function ChatPage() {
       setLastSeenMap(map);
     });
 
-    api.get('/chats').then((res) => {
-      setChats(res.data);
-      const counts = {};
-      res.data.forEach((chat) => {
-        if (chat.unreadCount) counts[chat._id] = chat.unreadCount;
+    // Ensure saved messages chat exists, then load all chats
+    api.post('/chats/saved').then(() => {
+      api.get('/chats').then((res) => {
+        // Sort: saved messages first, then by updatedAt
+        const sorted = [...res.data].sort((a, b) => {
+          if (a.isSavedMessages) return -1;
+          if (b.isSavedMessages) return 1;
+          return new Date(b.updatedAt) - new Date(a.updatedAt);
+        });
+        setChats(sorted);
+        const counts = {};
+        sorted.forEach((chat) => {
+          if (chat.unreadCount) counts[chat._id] = chat.unreadCount;
+        });
+        setUnreadCounts(counts);
       });
-      setUnreadCounts(counts);
     });
   }, []);
 
@@ -214,7 +224,14 @@ export default function ChatPage() {
         },
         updatedAt: now,
       };
-      return [updated, ...prev.filter((c) => c._id !== msg.chatId)];
+      // Keep saved messages always first
+      const rest = prev.filter((c) => c._id !== msg.chatId);
+      const savedMsg = rest.find((c) => c.isSavedMessages);
+      const others   = rest.filter((c) => !c.isSavedMessages);
+      if (updated.isSavedMessages) {
+        return [updated, ...others];
+      }
+      return savedMsg ? [savedMsg, updated, ...others.filter((c) => c._id !== updated._id)] : [updated, ...others];
     });
   }, []);
 

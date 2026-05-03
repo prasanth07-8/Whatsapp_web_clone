@@ -45,6 +45,8 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
   const [forwardMsg, setForwardMsg]   = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selectMode, setSelectMode]   = useState(false);
+  const [selectAction, setSelectAction] = useState('delete'); // 'delete' | 'forward'
+  const [selectDeleteDialog, setSelectDeleteDialog] = useState(false);
   const [pinnedOpen, setPinnedOpen]   = useState(false);
   const [pinnedMsgs, setPinnedMsgs]   = useState([]);
   const [showEmoji, setShowEmoji]       = useState(false);
@@ -58,13 +60,17 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
   const [showEvent, setShowEvent]       = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
   const [confirmDialog, setConfirmDialog]     = useState(null); // { title, message, icon, onConfirm }
+  const [playingAudioId, setPlayingAudioId]   = useState(null); // ID of currently playing voice message
   const bottomRef     = useRef(null);
   const unreadRef     = useRef(null);
   const typingTimeout = useRef(null);
   const searchRef     = useRef(null);
   const inputRef      = useRef(null);
 
-  const otherUser = chat?.participants?.find((p) => p._id !== user._id);
+  const isSavedMessages = chat?.isSavedMessages || false;
+  const otherUser = isSavedMessages ? null : chat?.participants?.find((p) => p._id !== user._id);
+  // For self-chat, receiverId = own ID; for normal chat = other user's ID
+  const receiverId = isSavedMessages ? user._id : otherUser?._id;
 
   // Handle live incoming message pushed from ChatPage
   useEffect(() => {
@@ -187,6 +193,34 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
   useEffect(() => { if (searchOpen) searchRef.current?.focus(); }, [searchOpen]);
   useEffect(() => { if (replyTo || editMsg) inputRef.current?.focus(); }, [replyTo, editMsg]);
 
+  // ── Audio chain: auto-play next voice message when current ends ──
+
+  // Helper: after adding a message to state, if self-chat mark it read instantly
+  const addMessageAndMarkRead = async (data) => {
+    if (isSavedMessages) {
+      setMessages((prev) => [...prev, { ...data, status: 'read' }]);
+      await api.put(`/messages/${chat._id}/read`).catch(() => {});
+    } else {
+      setMessages((prev) => [...prev, data]);
+      socket?.emit('send_message', { ...data, chatId: chat._id });
+    }
+    onMessageSent?.({ ...data, chatId: chat._id });
+  };
+  const handleAudioPlay = (id) => setPlayingAudioId(id);
+
+  const handleAudioEnded = (id) => {
+    // Find the next audio message after this one
+    const audioMsgs = messages.filter(
+      (m) => (m.mediaType === 'audio' || m.messageType === 'audio') && m.mediaUrl && !m.uploading
+    );
+    const idx = audioMsgs.findIndex((m) => m._id === id);
+    if (idx !== -1 && idx < audioMsgs.length - 1) {
+      setPlayingAudioId(audioMsgs[idx + 1]._id);
+    } else {
+      setPlayingAudioId(null);
+    }
+  };
+
   // Send or edit
   const handleSend = async (e) => {
     e.preventDefault();
@@ -200,14 +234,21 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
         setEditMsg(null);
       } else {
         const { data } = await api.post('/messages', {
-          chatId: chat._id, receiverId: otherUser._id,
+          chatId: chat._id, receiverId: receiverId,
           text, replyTo: replyTo?._id || null,
         });
-        // If receiver is online, immediately show as delivered
-        const isReceiverOnline = onlineUsers?.includes(otherUser?._id);
-        const msgWithStatus = { ...data, status: isReceiverOnline ? 'delivered' : 'sent' };
-        setMessages((prev) => [...prev, msgWithStatus]);
-        socket?.emit('send_message', { ...data, chatId: chat._id });
+        // Self-chat: instantly delivered + read (blue ticks)
+        if (isSavedMessages) {
+          const readMsg = { ...data, status: 'read' };
+          setMessages((prev) => [...prev, readMsg]);
+          await api.put(`/messages/${chat._id}/read`);
+        } else {
+          // If receiver is online, immediately show as delivered
+          const isReceiverOnline = onlineUsers?.includes(otherUser?._id);
+          const msgWithStatus = { ...data, status: isReceiverOnline ? 'delivered' : 'sent' };
+          setMessages((prev) => [...prev, msgWithStatus]);
+          socket?.emit('send_message', { ...data, chatId: chat._id });
+        }
         onMessageSent?.({ ...data, chatId: chat._id });
         setReplyTo(null);
       }
@@ -260,7 +301,7 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
         });
         const { data } = await api.post('/messages', {
           chatId: chat._id,
-          receiverId: otherUser._id,
+          receiverId: receiverId,
           text: caption || '',
           replyTo: replyTo?._id || null,
           mediaUrl:    uploadData.mediaUrl,
@@ -268,9 +309,7 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
           mediaName:   uploadData.mediaName,
           messageType: uploadData.mediaType,
         });
-        setMessages((prev) => [...prev, data]);
-        socket?.emit('send_message', { ...data, chatId: chat._id });
-        onMessageSent?.({ ...data, chatId: chat._id });
+        await addMessageAndMarkRead(data);
       }
       setMediaFiles(null);
       setReplyTo(null);
@@ -282,12 +321,10 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
   const handlePollSend = async (pollData) => {
     try {
       const { data } = await api.post('/messages', {
-        chatId: chat._id, receiverId: otherUser._id,
+        chatId: chat._id, receiverId: receiverId,
         text: pollData.question, messageType: 'poll', poll: pollData,
       });
-      setMessages((prev) => [...prev, data]);
-      socket?.emit('send_message', { ...data, chatId: chat._id });
-      onMessageSent?.({ ...data, chatId: chat._id });
+      await addMessageAndMarkRead(data);
     } catch (err) { console.error(err); }
   };
 
@@ -295,12 +332,10 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
   const handleContactSend = async (contactData) => {
     try {
       const { data } = await api.post('/messages', {
-        chatId: chat._id, receiverId: otherUser._id,
+        chatId: chat._id, receiverId: receiverId,
         text: contactData.name, messageType: 'contact', contact: contactData,
       });
-      setMessages((prev) => [...prev, data]);
-      socket?.emit('send_message', { ...data, chatId: chat._id });
-      onMessageSent?.({ ...data, chatId: chat._id });
+      await addMessageAndMarkRead(data);
     } catch (err) { console.error(err); }
   };
 
@@ -308,12 +343,10 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
   const handleEventSend = async (eventData) => {
     try {
       const { data } = await api.post('/messages', {
-        chatId: chat._id, receiverId: otherUser._id,
+        chatId: chat._id, receiverId: receiverId,
         text: eventData.title, messageType: 'event', event: eventData,
       });
-      setMessages((prev) => [...prev, data]);
-      socket?.emit('send_message', { ...data, chatId: chat._id });
-      onMessageSent?.({ ...data, chatId: chat._id });
+      await addMessageAndMarkRead(data);
     } catch (err) { console.error(err); }
   };
 
@@ -328,6 +361,20 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
 
   const handleAudioSend = async (blob) => {
     setShowAudio(false);
+    // Optimistic placeholder — shows spinner while uploading
+    const tempId = `temp-audio-${Date.now()}`;
+    const tempMsg = {
+      _id: tempId,
+      chatId: chat._id,
+      senderId: { _id: user._id, username: user.username, avatar: user.avatar },
+      messageType: 'audio',
+      mediaType: 'audio',
+      mediaUrl: null,
+      uploading: true,
+      createdAt: new Date().toISOString(),
+      status: 'sent',
+    };
+    setMessages((prev) => [...prev, tempMsg]);
     try {
       const file = new File([blob], 'voice-message.webm', { type: 'audio/webm' });
       const formData = new FormData();
@@ -337,17 +384,27 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
       });
       const { data } = await api.post('/messages', {
         chatId: chat._id,
-        receiverId: otherUser._id,
+        receiverId: receiverId,
         text: '',
         mediaUrl:    uploadData.mediaUrl,
         mediaType:   'audio',
         mediaName:   'Voice message',
         messageType: 'audio',
       });
-      setMessages((prev) => [...prev, data]);
-      socket?.emit('send_message', { ...data, chatId: chat._id });
-      onMessageSent?.({ ...data, chatId: chat._id });
-    } catch (err) { console.error(err); }
+      // Replace optimistic placeholder with real message
+      if (isSavedMessages) {
+        setMessages((prev) => prev.map((m) => m._id === tempId ? { ...data, status: 'read' } : m));
+        await api.put(`/messages/${chat._id}/read`).catch(() => {});
+        onMessageSent?.({ ...data, chatId: chat._id });
+      } else {
+        setMessages((prev) => prev.map((m) => m._id === tempId ? data : m));
+        socket?.emit('send_message', { ...data, chatId: chat._id });
+        onMessageSent?.({ ...data, chatId: chat._id });
+      }
+    } catch (err) {
+      console.error(err);
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
+    }
   };
 
   // Actions
@@ -369,6 +426,14 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
     const { data } = await api.put(`/messages/${id}/star`);
     setMessages((prev) => prev.map((m) => (m._id === id ? { ...m, isStarred: data.isStarred } : m)));
     socket?.emit('message_starred', data);
+  };
+
+  const handleReact = async (id, emoji) => {
+    try {
+      const { data } = await api.put(`/messages/${id}/react`, { emoji });
+      setMessages((prev) => prev.map((m) => (m._id === id ? data : m)));
+      socket?.emit('message_updated', { ...data, chatId: chat._id });
+    } catch (err) { console.error(err); }
   };
 
   const handlePin = async (id) => {
@@ -425,15 +490,38 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
 
   const handleEdit = (msg) => { setEditMsg(msg); setReplyTo(null); setText(msg.text); };
 
-  const handleForward = (msg) => setForwardMsg(msg);
+  const handleForward = (msg) => {
+    // Enter select mode with forward action, pre-select this message
+    setSelectMode(true);
+    setSelectAction('forward');
+    setSelectedIds(new Set([msg._id]));
+  };
+
+  const handleForwardSelected = () => {
+    if (!selectedIds.size) return;
+    // Collect selected messages in order
+    const msgsToForward = messages.filter((m) => selectedIds.has(m._id));
+    setForwardMsg(msgsToForward); // pass array
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
 
   const handleForwardSend = async (targetChat) => {
-    const { data } = await api.post('/messages', {
-      chatId: targetChat._id,
-      receiverId: targetChat.participants.find((p) => p._id !== user._id)?._id,
-      text: forwardMsg.text,
-    });
-    socket?.emit('send_message', { ...data, chatId: targetChat._id });
+    const msgs = Array.isArray(forwardMsg) ? forwardMsg : [forwardMsg];
+    for (const msg of msgs) {
+      const { data } = await api.post('/messages', {
+        chatId: targetChat._id,
+        receiverId: targetChat.participants.find((p) => p._id !== user._id)?._id,
+        text: msg.text,
+        ...(msg.mediaUrl && {
+          mediaUrl: msg.mediaUrl,
+          mediaType: msg.mediaType,
+          mediaName: msg.mediaName,
+          messageType: msg.messageType,
+        }),
+      });
+      socket?.emit('send_message', { ...data, chatId: targetChat._id });
+    }
     setForwardMsg(null);
   };
 
@@ -448,12 +536,20 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
   // Enter select mode from context menu — pre-select the tapped message
   const handleSelectMessage = (id) => {
     setSelectMode(true);
+    setSelectAction('delete');
     setSelectedIds(new Set([id]));
   };
 
-  const handleDeleteSelected = async () => {
-    for (const id of selectedIds) await handleDelete(id, 'me');
-    setSelectedIds(new Set()); setSelectMode(false);
+  const handleDeleteSelected = () => {
+    if (!selectedIds.size) return;
+    setSelectDeleteDialog(true);
+  };
+
+  const handleDeleteSelectedConfirm = async (deleteFor) => {
+    setSelectDeleteDialog(false);
+    for (const id of selectedIds) await handleDelete(id, deleteFor);
+    setSelectedIds(new Set());
+    setSelectMode(false);
   };
 
   const loadPinned = async () => {
@@ -508,29 +604,12 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
       {/* Header */}
       <div className="chat-header">
         {selectMode ? (
+          /* Select mode header — same as normal but shows count */
           <>
-            <button className="header-icon-btn" onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }} title="Cancel">
+            <button className="header-icon-btn" onClick={() => { setSelectMode(false); setSelectedIds(new Set()); setSelectAction('delete'); }} title="Cancel">
               <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
             <span className="chat-header-name">{selectedIds.size} selected</span>
-            <div className="header-actions">
-              <button
-                className="header-icon-btn"
-                onClick={() => { const msg = messages.find(m => selectedIds.has(m._id)); if (msg) handleForward(msg); }}
-                disabled={selectedIds.size !== 1}
-                title="Forward"
-              >
-                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1 1-5 4-10 11-11z"/></svg>
-              </button>
-              <button
-                className="header-icon-btn danger"
-                onClick={handleDeleteSelected}
-                disabled={!selectedIds.size}
-                title="Delete"
-              >
-                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-              </button>
-            </div>
           </>
         ) : (
           <>
@@ -538,26 +617,45 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
             <button className="header-icon-btn mobile-back-btn" onClick={onMobileBack} title="Back">
               <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
             </button>
-            <div className="chat-header-avatar" onClick={() => setShowContactInfo(true)}>
-              {otherUser?.avatar
-                ? <img src={`http://localhost:5000${otherUser.avatar}`} alt={otherUser.username} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                : <DefaultAvatar />
-              }
+
+            {/* Avatar */}
+            <div className="chat-header-avatar" onClick={() => !isSavedMessages && setShowContactInfo(true)}
+              style={{ cursor: isSavedMessages ? 'default' : 'pointer' }}>
+              {isSavedMessages ? (
+                user?.avatar
+                  ? <img src={`http://localhost:5000${user.avatar}`} alt={user.username} style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
+                  : <DefaultAvatar />
+              ) : otherUser?.avatar ? (
+                <img src={`http://localhost:5000${otherUser.avatar}`} alt={otherUser.username} style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
+              ) : (
+                <DefaultAvatar />
+              )}
             </div>
-            <div className="chat-header-info" onClick={() => setShowContactInfo(true)}>
-              <span className="chat-header-name">{otherUser?.username}</span>
-              {isTyping
-                ? <span className="chat-header-typing">typing...</span>
-                : <span className="chat-header-status">
-                    {onlineUsers?.includes(otherUser?._id)
-                      ? 'online'
-                      : lastSeenMap?.[otherUser?._id]
-                        ? formatLastSeen(lastSeenMap[otherUser._id])
-                        : 'last seen recently'
-                    }
-                  </span>
-              }
-            </div>            <div className="header-actions" style={{ position: 'relative' }}>
+
+            {/* Name + status */}
+            <div className="chat-header-info" onClick={() => !isSavedMessages && setShowContactInfo(true)}
+              style={{ cursor: isSavedMessages ? 'default' : 'pointer' }}>
+              <span className="chat-header-name">
+                {isSavedMessages ? `${user.username} (You)` : otherUser?.username}
+              </span>
+              {!isSavedMessages && (
+                isTyping
+                  ? <span className="chat-header-typing">typing...</span>
+                  : <span className="chat-header-status">
+                      {onlineUsers?.includes(otherUser?._id)
+                        ? 'online'
+                        : lastSeenMap?.[otherUser?._id]
+                          ? formatLastSeen(lastSeenMap[otherUser._id])
+                          : 'last seen recently'
+                      }
+                    </span>
+              )}
+              {isSavedMessages && (
+                <span className="chat-header-status">Message yourself</span>
+              )}
+            </div>
+
+            <div className="header-actions" style={{ position: 'relative' }}>
               {pinnedCount > 0 && (
                 <button className={`header-icon-btn ${pinnedOpen ? 'active' : ''}`} onClick={togglePinned} title="Pinned messages">
                   <PinHeaderIcon /> <span className="pin-count">{pinnedCount}</span>
@@ -621,6 +719,16 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
 
       {/* Messages */}
       <div className="messages-container">
+        {/* Self-chat empty state — shown only when no messages yet */}
+        {isSavedMessages && messages.length === 0 && (
+          <div className="self-chat-empty">
+            <div className="self-chat-empty-icon">
+              <svg viewBox="0 0 24 24" width="48" height="48"><path fill="#00a884" d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+            </div>
+            <p className="self-chat-empty-title">Message yourself</p>
+            <p className="self-chat-empty-sub">Use this space to save notes, links, photos and any other messages to yourself.</p>
+          </div>
+        )}
         {messages.map((msg, i) => {
           const msgDate = new Date(msg.createdAt);
           const prevDate = i > 0 ? new Date(messages[i - 1].createdAt) : null;
@@ -657,6 +765,10 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
               onCopy={handleCopy}
               currentUserId={user._id}
               onVote={handleVotePoll}
+              playingAudioId={playingAudioId}
+              onAudioPlay={handleAudioPlay}
+              onAudioEnded={handleAudioEnded}
+              onReact={handleReact}
             />
             </div>
           );
@@ -759,6 +871,66 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
           onCancel={() => setConfirmDialog(null)}
         />
       )}
+
+      {/* ── Select mode bottom bar — slides up like WhatsApp ── */}
+      {selectMode && (
+        <div className="select-bottom-bar">
+          <button
+            className="select-bar-cancel"
+            onClick={() => { setSelectMode(false); setSelectedIds(new Set()); setSelectAction('delete'); }}
+            title="Cancel"
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+          <span className="select-bar-count">
+            {selectedIds.size} selected
+          </span>
+          {selectAction === 'forward' ? (
+            <button
+              className="select-bar-forward"
+              onClick={handleForwardSelected}
+              disabled={!selectedIds.size}
+              title="Forward"
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1 1-5 4-10 11-11z"/></svg>
+            </button>
+          ) : (
+            <button
+              className="select-bar-delete"
+              onClick={handleDeleteSelected}
+              disabled={!selectedIds.size}
+              title="Delete"
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Select delete dialog */}
+      {selectDeleteDialog && (
+        <SelectDeleteDialog
+          count={selectedIds.size}
+          hasMedia={[...selectedIds].some((id) => {
+            const msg = messages.find((m) => m._id === id);
+            return msg?.mediaUrl;
+          })}
+          canDeleteForEveryone={
+            // Never available in self-chat; otherwise only for own messages within time limit
+            !isSavedMessages &&
+            [...selectedIds].every((id) => {
+              const msg = messages.find((m) => m._id === id);
+              return msg &&
+                (msg.senderId?._id?.toString() === user._id?.toString() || msg.senderId?.toString() === user._id?.toString()) &&
+                !msg.isDeleted &&
+                (Date.now() - new Date(msg.createdAt).getTime()) < 4096 * 1000;
+            })
+          }
+          onDeleteForMe={() => handleDeleteSelectedConfirm('me')}
+          onDeleteForEveryone={() => handleDeleteSelectedConfirm('everyone')}
+          onCancel={() => setSelectDeleteDialog(false)}
+        />
+      )}
     </div>
 
     {/* Media preview — covers chat area only (not sidebar) */}
@@ -770,8 +942,8 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
       />
     )}
 
-    {/* Contact info panel — slides in from right */}
-    {showContactInfo && (
+    {/* Contact info panel — slides in from right (not for self-chat) */}
+    {showContactInfo && !isSavedMessages && (
       <ContactInfo
         contact={otherUser}
         isOnline={onlineUsers?.includes(otherUser?._id)}
@@ -789,26 +961,60 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
 // Forward modal — pick a chat to forward to
 function ForwardModal({ forwardMsg, onClose, onSend, userId }) {
   const [chats, setChats] = useState([]);
+  const [search, setSearch] = useState('');
   useEffect(() => { api.get('/chats').then((r) => setChats(r.data)); }, []);
+
+  const msgs = Array.isArray(forwardMsg) ? forwardMsg : [forwardMsg];
+  const count = msgs.length;
+
+  const filtered = search.trim()
+    ? chats.filter((c) => {
+        const other = c.participants.find((p) => p._id !== userId);
+        return other?.username?.toLowerCase().includes(search.toLowerCase());
+      })
+    : chats;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <span>➡️ Forward Message</span>
-          <button onClick={onClose}>✕</button>
+      <div className="fwd-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="fwd-modal-header">
+          <button className="fwd-modal-close" onClick={onClose}>
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+          <span className="fwd-modal-title">Forward message{count > 1 ? 's' : ''}</span>
         </div>
-        <p className="modal-preview">"{forwardMsg.text}"</p>
-        <div className="modal-list">
-          {chats.map((c) => {
+
+        {/* Search */}
+        <div className="fwd-modal-search">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="#8696a0" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search contacts"
+            autoFocus
+          />
+        </div>
+
+        {/* Chat list */}
+        <div className="fwd-modal-list">
+          {filtered.map((c) => {
             const other = c.participants.find((p) => p._id !== userId);
             return (
-              <div key={c._id} className="modal-item" onClick={() => onSend(c)}>
-                <div className="modal-avatar"><DefaultAvatar /></div>
-                <span>{other?.username}</span>
+              <div key={c._id} className="fwd-modal-item" onClick={() => { onSend(c); onClose(); }}>
+                <div className="fwd-modal-avatar">
+                  {other?.avatar
+                    ? <img src={`http://localhost:5000${other.avatar}`} alt={other.username} />
+                    : <DefaultAvatar size="46px" />
+                  }
+                </div>
+                <span className="fwd-modal-name">{other?.username}</span>
               </div>
             );
           })}
+          {filtered.length === 0 && (
+            <div className="fwd-modal-empty">No contacts found</div>
+          )}
         </div>
       </div>
     </div>
@@ -865,6 +1071,51 @@ function ClearDeleteDialog({ dialog, onCancel }) {
             onClick={() => dialog.onConfirm(deleteStarred)}
           >
             {dialog.confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// WhatsApp-style delete dialog for selected messages
+function SelectDeleteDialog({ count, hasMedia, canDeleteForEveryone, onDeleteForMe, onDeleteForEveryone, onCancel }) {
+  const [deleteFile, setDeleteFile] = useState(false);
+
+  return (
+    <div className="wa-delete-overlay" onClick={onCancel}>
+      <div className="wa-delete-card" onClick={(e) => e.stopPropagation()}>
+        {/* Title */}
+        <p className="wa-delete-title">
+          Delete message{count !== 1 ? 's' : ''}?
+        </p>
+
+        {/* "Delete file from your phone" checkbox — only for media */}
+        {hasMedia && (
+          <label className="wa-delete-checkbox-row" onClick={(e) => e.stopPropagation()}>
+            <span className={`wa-delete-checkbox ${deleteFile ? 'checked' : ''}`} onClick={() => setDeleteFile((v) => !v)}>
+              {deleteFile && (
+                <svg viewBox="0 0 24 24" width="14" height="14">
+                  <path fill="#fff" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+              )}
+            </span>
+            <span className="wa-delete-checkbox-label">Delete file from your phone</span>
+          </label>
+        )}
+
+        {/* Action buttons — pill shaped, stacked */}
+        <div className="wa-delete-actions">
+          {canDeleteForEveryone && (
+            <button className="wa-delete-btn wa-delete-btn--primary" onClick={onDeleteForEveryone}>
+              Delete for everyone
+            </button>
+          )}
+          <button className="wa-delete-btn wa-delete-btn--primary" onClick={onDeleteForMe}>
+            Delete for me
+          </button>
+          <button className="wa-delete-btn wa-delete-btn--cancel" onClick={onCancel}>
+            Cancel
           </button>
         </div>
       </div>

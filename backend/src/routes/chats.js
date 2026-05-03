@@ -1,7 +1,8 @@
 const router = require('express').Router();
 const auth   = require('../middleware/auth');
-const { accessChat, getChats, clearChat, deleteChat, toggleFavourite, togglePin, toggleArchive, markChatRead } = require('../controllers/chatController');
+const { accessChat, accessSavedMessages, getChats, clearChat, deleteChat, toggleFavourite, togglePin, toggleArchive, markChatRead } = require('../controllers/chatController');
 
+router.post('/saved',                 auth, accessSavedMessages);
 router.post('/',                      auth, accessChat);
 router.get('/',                       auth, getChats);
 router.put('/:chatId/clear',          auth, clearChat);

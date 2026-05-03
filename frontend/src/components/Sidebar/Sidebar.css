@@ -414,6 +414,22 @@
   overflow: hidden;
 }
 
+/* Saved Messages avatar — teal gradient like WhatsApp */
+.saved-msg-avatar {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #00a884 0%, #017561 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+/* Saved Messages chat item — always at top, subtle highlight */
+.chat-item-saved {
+  border-bottom: 1px solid rgba(134,150,160,0.1);
+}
+
 .chat-avatar-img {
   width: 100%;
   height: 100%;
@@ -1091,11 +1107,62 @@
   font-weight: 500;
 }
 
-.archived-row-count {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+.archived-row-unread {
+  background: var(--green, #00a884);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 6px;
+  min-width: 18px;
+  text-align: center;
+  line-height: 1.6;
 }
 
 .archived-back-row {
   display: none; /* handled by header back button */
 }
+
+/* ── Archive undo toast ── */
+.archive-toast {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  background: #1f2c34;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  color: #e9edef;
+  font-size: 0.82rem;
+  z-index: 500;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  animation: toastSlideUp 0.18s ease;
+  white-space: nowrap;
+}
+
+@keyframes toastSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.archive-toast-text {
+  font-weight: 400;
+  color: #e9edef;
+}
+
+.archive-toast-undo {
+  background: #2a3942;
+  border: none;
+  color: #e9edef;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-family: inherit;
+  transition: background 0.12s;
+  flex-shrink: 0;
+}
+.archive-toast-undo:hover { background: #3b4a54; }

@@ -37,6 +37,11 @@ const messageSchema = new mongoose.Schema({
   isPinned:    { type: Boolean, default: false },
   deletedFor:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   replyTo:     { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
+  // Emoji reactions: [{ emoji: '❤️', userId: ObjectId }]
+  reactions:   [{
+    emoji:  { type: String, required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  }],
 }, { timestamps: true });
 
 messageSchema.index({ chatId: 1, createdAt: 1 });

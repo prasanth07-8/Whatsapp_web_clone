@@ -3,6 +3,7 @@ const auth   = require('../middleware/auth');
 const {
   sendMessage, getMessages, markAsRead, markAllRead,
   deleteMessage, editMessage, starMessage, pinMessage, getPinned, votePoll, getStarred, getAllMedia,
+  reactToMessage,
 } = require('../controllers/messageController');
 
 router.post('/',                    auth, sendMessage);
@@ -17,5 +18,6 @@ router.put('/:id/star',             auth, starMessage);
 router.put('/:id/pin',              auth, pinMessage);
 router.get('/:chatId/pinned/list',  auth, getPinned);
 router.put('/:id/vote',             auth, votePoll);
+router.put('/:id/react',            auth, reactToMessage);
 
 module.exports = router;

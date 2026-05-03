@@ -1,79 +1,118 @@
-.audio-recorder {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-  padding: 0 4px;
-}
-
-.ar-cancel {
-  background: none;
-  border: none;
-  color: #f15c6d;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  padding: 6px;
-  border-radius: 50%;
-  transition: background 0.15s;
-}
-.ar-cancel:hover { background: rgba(241,92,109,0.1); }
-
-.ar-recording {
+/* ── Outer bar — replaces the entire input bar content ── */
+.ar-bar {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 1;
+  /* matches .message-input-bar padding so nothing shifts */
 }
 
-.ar-dot {
-  width: 10px;
-  height: 10px;
-  background: #f15c6d;
-  border-radius: 50%;
-  animation: pulse 1s infinite;
+/* Spacer on the left — same width as the + button so pill starts at same x */
+.ar-spacer {
+  width: 42px;
   flex-shrink: 0;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
+/* ── Pill — dark rounded container (same as .input-pill) ── */
+.ar-pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-input, #2a3942);
+  border-radius: 20px;
+  padding: 0 12px;
+  min-height: 42px;
+  overflow: hidden;
 }
 
-.ar-timer {
-  color: #e9edef;
-  font-size: 1rem;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.05em;
-}
-
-.ar-stop {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: #f15c6d;
+/* ── Trash button ── */
+.ar-btn {
+  background: none;
   border: none;
-  color: #fff;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  padding: 5px;
+  border-radius: 50%;
   flex-shrink: 0;
   transition: background 0.15s;
 }
-.ar-stop:hover { background: #d94f5e; }
 
-.ar-preview {
-  flex: 1;
-  height: 36px;
-  accent-color: #00a884;
+.ar-trash {
+  color: #8696a0;
+}
+.ar-trash:hover {
+  color: #f15c6d;
+  background: rgba(241, 92, 109, 0.1);
 }
 
+/* ── Red recording dot ── */
+.ar-dot {
+  width: 9px;
+  height: 9px;
+  background: #f15c6d;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: ar-blink 1.2s ease-in-out infinite;
+}
+.ar-dot--paused {
+  animation: none;
+  opacity: 0.4;
+}
+
+@keyframes ar-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+/* ── Timer ── */
+.ar-timer {
+  color: var(--text-primary, #e9edef);
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  min-width: 36px;
+}
+
+/* ── Waveform ── */
+.ar-wave {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  overflow: hidden;
+}
+
+.ar-wave-bar {
+  display: inline-block;
+  width: 3px;
+  border-radius: 2px;
+  background: #f15c6d;
+  min-height: 3px;
+  max-height: 26px;
+  transition: height 0.07s ease, opacity 0.2s;
+  flex-shrink: 0;
+}
+
+/* ── Pause button ── */
+.ar-pause {
+  color: #f15c6d;
+  flex-shrink: 0;
+}
+.ar-pause:hover {
+  background: rgba(241, 92, 109, 0.1);
+}
+
+/* ── Send button — green circle, same as .send-btn ── */
 .ar-send {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: #00a884;
+  background: var(--green, #00a884);
   border: none;
   color: #fff;
   display: flex;

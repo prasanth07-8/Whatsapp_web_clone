@@ -116,146 +116,189 @@
 .lightbox-close:hover { background: rgba(255,255,255,0.2); }
 
 /* ═══════════════════════════════════════════
-   POLL CARD — WhatsApp style
+   POLL CARD — exact WhatsApp Web style
    ═══════════════════════════════════════════ */
-.poll-card {
-  min-width: 260px;
-  max-width: 320px;
+
+/* The poll IS the bubble — no inner card wrapper */
+.wa-poll {
+  min-width: 280px;
+  max-width: 360px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-bottom: 2px;
+  gap: 0;
 }
 
-.poll-header {
+.wa-poll-question {
+  color: #e9edef;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 6px;
+  line-height: 1.35;
+}
+
+.wa-poll-subtitle {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-bottom: 2px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  color: rgba(233,237,239,0.65);
+  font-size: 0.82rem;
+  margin-bottom: 14px;
 }
 
-.poll-type-label {
-  color: rgba(233,237,239,0.6);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-}
-
-.poll-question {
-  color: #e9edef;
-  font-size: 0.95rem;
-  font-weight: 500;
-  line-height: 1.4;
-  margin: 0;
-}
-
-.poll-options {
+/* Options list */
+.wa-poll-options {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  margin-bottom: 4px;
 }
 
-.poll-option {
-  position: relative;
-  background: rgba(255,255,255,0.06);
-  border: 1.5px solid rgba(255,255,255,0.12);
-  border-radius: 10px;
-  padding: 10px 12px;
+.wa-poll-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: none;
+  border: none;
+  padding: 0;
   cursor: pointer;
   text-align: left;
-  overflow: hidden;
-  transition: border-color 0.15s, background 0.15s;
   width: 100%;
-  min-height: 44px;
+  transition: opacity 0.12s;
 }
+.wa-poll-option:hover { opacity: 0.85; }
 
-.poll-option:hover:not(.results-shown) {
-  border-color: rgba(255,255,255,0.3);
-  background: rgba(255,255,255,0.1);
-}
-
-.poll-option.voted {
-  border-color: #00a884;
-}
-
-/* Progress fill bar behind content */
-.poll-option-bar {
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  background: rgba(0,168,132,0.18);
-  border-radius: 8px 0 0 8px;
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
-}
-
-.poll-option.voted .poll-option-bar {
-  background: rgba(0,168,132,0.28);
-}
-
-.poll-option-content {
-  position: relative;
+/* Radio / check icon */
+.wa-poll-radio {
+  flex-shrink: 0;
+  margin-top: 1px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+}
+
+/* Option body: text row + bar */
+.wa-poll-option-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.wa-poll-option-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
 }
 
-.poll-option-left {
+.wa-poll-option-text {
+  color: #e9edef;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-poll-option-right {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex: 1;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+/* Voter avatars stack */
+.wa-poll-avatars {
+  display: flex;
+  align-items: center;
+}
+.wa-poll-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1.5px solid var(--bg-msg-out, #005c4b);
+  margin-left: -5px;
+  flex-shrink: 0;
+}
+.wa-poll-avatar:first-child { margin-left: 0; }
+.wa-poll-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wa-poll-vote-count {
+  color: rgba(233,237,239,0.75);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 12px;
+  text-align: right;
+}
+
+/* Progress bar */
+.wa-poll-bar-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255,255,255,0.18);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.wa-poll-bar-fill {
+  height: 100%;
+  background: rgba(255,255,255,0.35);
+  border-radius: 2px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 0;
 }
 
-/* Radio circle */
-.poll-radio {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: border-color 0.15s;
+.wa-poll-bar-fill--voted {
+  background: #00e676; /* bright green for voted option */
 }
 
-.poll-option.voted .poll-radio {
-  border-color: #00a884;
-  background: #00a884;
-}
-
-.poll-radio-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #fff;
-}
-
-.poll-option-text {
-  color: #e9edef;
-  font-size: 0.9rem;
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.poll-option-pct {
-  color: rgba(233,237,239,0.7);
-  font-size: 0.8rem;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.poll-total {
-  color: rgba(233,237,239,0.55);
-  font-size: 0.75rem;
-  margin: 0;
+/* Footer: divider + View votes */
+.wa-poll-footer {
+  margin-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.12);
   padding-top: 2px;
 }
+
+.wa-poll-view-votes {
+  width: 100%;
+  background: none;
+  border: none;
+  color: #00a884;
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 10px 0 4px;
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+  transition: color 0.12s;
+  letter-spacing: 0.01em;
+}
+.wa-poll-view-votes:hover { color: #00c49a; }
+
+/* ── Poll vote count button (legacy) ── */
+.poll-total-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: rgba(233,237,239,0.55);
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: color 0.15s;
+}
+.poll-total-btn:hover:not(:disabled) {
+  color: rgba(233,237,239,0.85);
+  text-decoration: underline;
+}
+.poll-total-btn:disabled { cursor: default; }
 
 /* ═══════════════════════════════════════════
    CONTACT CARD
@@ -373,24 +416,6 @@
   margin: 2px 0 0;
   line-height: 1.3;
 }
-
-/* ── Poll vote count button ────────────────────────── */
-.poll-total-btn {
-  background: none;
-  border: none;
-  padding: 0;
-  color: rgba(233,237,239,0.55);
-  font-size: 0.75rem;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  transition: color 0.15s;
-}
-.poll-total-btn:hover:not(:disabled) {
-  color: rgba(233,237,239,0.85);
-  text-decoration: underline;
-}
-.poll-total-btn:disabled { cursor: default; }
 
 /* ── Voters overlay ────────────────────────────────── */
 .voters-overlay {
@@ -560,3 +585,170 @@
   font-size: 0.88rem;
   text-align: center;
 }
+
+/* ══════════════════════════════════════════════════════
+   VOICE PLAYER — exact WhatsApp Web style
+   ══════════════════════════════════════════════════════ */
+
+/* Outer bubble — green (own) or dark (other), rounded */
+.vp-bubble {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 6px 8px;
+  border-radius: 7.5px;
+  min-width: 260px;
+  max-width: 340px;
+  position: relative;
+}
+.vp-bubble-own   { background: var(--bg-msg-out, #005c4b); border-bottom-right-radius: 2px; }
+.vp-bubble-other { background: var(--bg-msg-in,  #202c33); border-bottom-left-radius: 2px; }
+
+/* Avatar with mic badge */
+.vp-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+}
+.vp-avatar-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+.vp-mic-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #8696a0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  border: 2px solid var(--bg-msg-out, #005c4b);
+}
+.vp-bubble-other .vp-mic-badge {
+  border-color: var(--bg-msg-in, #202c33);
+}
+
+/* Right side */
+.vp-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Controls row: play btn + waveform */
+.vp-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Play/Pause button */
+.vp-play-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.vp-play-btn:hover:not(:disabled) { background: rgba(255,255,255,0.25); }
+.vp-play-btn:disabled { cursor: default; }
+
+/* Spinner while uploading */
+.vp-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: vp-spin 0.7s linear infinite;
+  display: block;
+}
+@keyframes vp-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Waveform container */
+.vp-wave {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+/* Blue playhead dot — no CSS transition, rAF handles smoothness */
+.vp-playhead {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #53bdeb;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Waveform bars */
+.vp-bar {
+  display: inline-block;
+  width: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  min-height: 3px;
+  max-height: 28px;
+}
+.vp-bar-played   { background: rgba(255,255,255,0.9); }
+.vp-bar-unplayed { background: rgba(255,255,255,0.35); }
+
+/* Meta row: duration left, time+ticks right */
+.vp-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 44px; /* align under waveform, past play btn */
+}
+
+.vp-duration {
+  color: rgba(233,237,239,0.7);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.vp-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.vp-time-label {
+  color: rgba(233,237,239,0.7);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ticks inside voice bubble */
+.vp-ticks      { display: flex; align-items: center; }
+.vp-ticks-sent      { color: rgba(233,237,239,0.6); }
+.vp-ticks-delivered { color: rgba(233,237,239,0.6); }
+.vp-ticks-read      { color: #53bdeb; }

@@ -1,6 +1,36 @@
 const Chat    = require('../models/Chat');
 const Message = require('../models/Message');
 
+// Get or create "Message Yourself" / Saved Messages chat
+exports.accessSavedMessages = async (req, res) => {
+  try {
+    let chat = await Chat.findOne({
+      isSavedMessages: true,
+      participants: req.userId,
+    })
+      .populate('participants', '-password')
+      .populate({ path: 'lastMessage', populate: { path: 'senderId', select: 'username' } });
+
+    if (!chat) {
+      chat = await Chat.create({
+        participants: [req.userId],
+        isSavedMessages: true,
+      });
+      chat = await Chat.findById(chat._id).populate('participants', '-password');
+    } else if (chat.deletedFor.map(String).includes(req.userId)) {
+      chat.deletedFor = chat.deletedFor.filter(id => id.toString() !== req.userId);
+      await chat.save();
+      chat = await Chat.findById(chat._id)
+        .populate('participants', '-password')
+        .populate({ path: 'lastMessage', populate: { path: 'senderId', select: 'username' } });
+    }
+
+    res.json(chat);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // Get or create a chat — also restores deleted chats when new message arrives
 exports.accessChat = async (req, res) => {
   try {
@@ -48,10 +78,11 @@ exports.getChats = async (req, res) => {
       const cleared = chat.clearedFor?.find(c => c.userId.toString() === req.userId);
       const unreadQuery = {
         chatId: chat._id,
-        receiverId: req.userId,
-        status: { $ne: 'read' },
         deletedFor: { $ne: req.userId },
+        status: { $ne: 'read' },
       };
+      // For normal chats only count messages received by this user
+      if (!chat.isSavedMessages) unreadQuery.receiverId = req.userId;
       if (cleared) unreadQuery.createdAt = { $gt: cleared.clearedAt };
 
       const unreadCount = await Message.countDocuments(unreadQuery);

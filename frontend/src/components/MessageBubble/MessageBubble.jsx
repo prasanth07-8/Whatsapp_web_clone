@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import MediaMessage from '../MediaMessage/MediaMessage';
+import DefaultAvatar from '../DefaultAvatar';
 import './MessageBubble.css';
 function Ticks({ status }) {
   if (status === 'read') {
@@ -36,12 +37,19 @@ export default function MessageBubble({
   message, isOwn, searchTerm, isSelected, onSelect,
   onReply, onEdit, onDelete, onStar, onPin, onForward, onCopy,
   currentUserId, onVote,
+  playingAudioId, onAudioPlay, onAudioEnded,
+  onReact,
 }) {
-  const [menuOpen, setMenuOpen]         = useState(false);
-  const [menuPos, setMenuPos]           = useState({ top: 0, left: 0 });
-  const [deleteDialog, setDeleteDialog] = useState(false);
-  const menuRef   = useRef(null);
-  const bubbleRef = useRef(null);
+  const [menuOpen, setMenuOpen]       = useState(false);
+  const [menuPos, setMenuPos]         = useState({ top: 0, left: 0 });
+  const [isHovered, setIsHovered]     = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [emojiPickerPos, setEmojiPickerPos]   = useState({ top: 0, left: 0 });
+  const [showFullEmojiPicker, setShowFullEmojiPicker] = useState(false);
+  const menuRef      = useRef(null);
+  const emojiPickRef = useRef(null);
+  const bubbleRef    = useRef(null);
+  const emojiBtnRef  = useRef(null);
 
   const time = new Date(message.createdAt).toLocaleTimeString([], {
     hour: '2-digit', minute: '2-digit',
@@ -55,6 +63,19 @@ export default function MessageBubble({
     if (menuOpen) document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [menuOpen]);
+
+  // Close emoji reaction picker on outside click
+  useEffect(() => {
+    const close = (e) => {
+      if (emojiPickRef.current && !emojiPickRef.current.contains(e.target) &&
+          emojiBtnRef.current && !emojiBtnRef.current.contains(e.target)) {
+        setEmojiPickerOpen(false);
+        setShowFullEmojiPicker(false);
+      }
+    };
+    if (emojiPickerOpen) document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [emojiPickerOpen]);
 
   const renderText = () => {
     if (!searchTerm?.trim()) return message.text;
@@ -94,6 +115,19 @@ export default function MessageBubble({
   const handleChevronClick = (e) => { e.stopPropagation(); openMenu(); };
   const handleContextMenu  = (e) => { e.preventDefault(); openMenu(); };
 
+  const handleEmojiBtn = (e) => {
+    e.stopPropagation();
+    if (!bubbleRef.current) return;
+    const rect = bubbleRef.current.getBoundingClientRect();
+    // Position picker above the bubble, aligned to the emoji button side
+    const pickerW = 232;
+    let left = isOwn ? rect.right - pickerW : rect.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - pickerW - 8));
+    const top = rect.top - 56; // above the bubble
+    setEmojiPickerPos({ top: Math.max(8, top), left });
+    setEmojiPickerOpen((o) => !o);
+  };
+
   // WhatsApp menu items differ for own vs received messages
   const menuItems = message.isDeleted ? [
     {
@@ -128,7 +162,7 @@ export default function MessageBubble({
     {
       label: 'Delete',
       icon: <DeleteIcon />,
-      action: () => { setMenuOpen(false); setDeleteDialog(true); },
+      action: () => act(() => onSelect(message._id)),
       danger: true,
     },
   ];
@@ -136,19 +170,21 @@ export default function MessageBubble({
   return (
     <>
       <div
-        className={`bubble-wrapper ${isOwn ? 'own' : 'other'} ${isSelected ? 'selected' : ''}`}
+        className={`bubble-wrapper ${isOwn ? 'own' : 'other'} ${isSelected ? 'selected' : ''} ${isSelected !== undefined ? 'select-mode' : ''}`}
         onClick={isSelected !== undefined ? () => onSelect(message._id) : undefined}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => { setIsHovered(false); }}
       >
-        {/* Checkbox in select mode */}
+        {/* Checkbox */}
         {isSelected !== undefined && (
           <div className={`msg-checkbox ${isSelected ? 'checked' : ''}`}>
-            {isSelected && <span>✓</span>}
+            {isSelected && <CheckIcon />}
           </div>
         )}
 
         <div
           ref={bubbleRef}
-          className={`bubble ${isOwn ? 'bubble-own' : 'bubble-other'} ${message.isPinned ? 'is-pinned' : ''}`}
+          className={`bubble ${isOwn ? 'bubble-own' : 'bubble-other'} ${message.isPinned ? 'is-pinned' : ''} ${(message.messageType === 'audio' || message.mediaType === 'audio') && !message.isDeleted ? 'bubble-audio' : ''} ${message.isDeleted ? 'bubble-deleted' : ''}`}
           onContextMenu={handleContextMenu}
         >
           {/* Reply preview */}
@@ -165,18 +201,26 @@ export default function MessageBubble({
           )}
 
           {/* Media / Poll / Contact / Event content */}
-          {(message.mediaUrl || ['poll','contact','event'].includes(message.messageType)) && !message.isDeleted && (
+          {(message.mediaUrl || message.uploading || ['poll','contact','event'].includes(message.messageType)) && !message.isDeleted && (
             <MediaMessage
               message={message}
               currentUserId={currentUserId}
               onVote={onVote}
+              senderAvatar={message.senderId?.avatar || null}
+              senderName={message.senderId?.username || ''}
+              isOwn={isOwn}
+              time={time}
+              status={message.status}
+              playingAudioId={playingAudioId}
+              onAudioPlay={onAudioPlay}
+              onAudioEnded={onAudioEnded}
             />
           )}
 
           {/* Text — only for plain text messages */}
           {message.isDeleted ? (
-            <p className="bubble-text">
-              <span className="deleted-text"><BlockIcon /> This message was deleted</span>
+            <p className="bubble-text deleted-msg-text">
+              <BanIcon /><span>{isOwn ? 'You deleted this message' : 'This message was deleted'}</span>
             </p>
           ) : !['poll','contact','event'].includes(message.messageType) && !message.mediaUrl && message.text ? (
             <p className="bubble-text">{renderText()}</p>
@@ -184,10 +228,10 @@ export default function MessageBubble({
 
           {/* Meta */}
           <span className="bubble-meta">
-            {message.isEdited && !message.isDeleted && <span className="edited-label">edited</span>}
-            {message.isStarred && !message.isDeleted && <span className="star-badge">★</span>}
+            {!message.isDeleted && message.isEdited && <span className="edited-label">edited</span>}
+            {!message.isDeleted && message.isStarred && <span className="star-badge">★</span>}
             <span className="bubble-time">{time}</span>
-            {isOwn && <Ticks status={message.status || 'sent'} />}
+            {isOwn && !message.isDeleted && <Ticks status={message.status || 'sent'} />}
           </span>
 
           {/* Chevron button — appears on hover */}
@@ -197,9 +241,88 @@ export default function MessageBubble({
             </button>
           )}
         </div>
+
+        {/* Emoji reaction button — sibling of bubble in the flex row */}
+        {!message.isDeleted && isHovered && (
+          <button
+            ref={emojiBtnRef}
+            className={`msg-emoji-btn ${isOwn ? 'msg-emoji-btn--own' : 'msg-emoji-btn--other'}`}
+            onClick={handleEmojiBtn}
+            title="React"
+          >
+            <EmojiReactIcon />
+          </button>
+        )}
+
+        {/* Reactions display — below the bubble */}
+        {message.reactions?.length > 0 && (
+          <ReactionBar
+            reactions={message.reactions}
+            currentUserId={currentUserId}
+            onReact={(emoji) => onReact?.(message._id, emoji)}
+            isOwn={isOwn}
+          />
+        )}
       </div>
 
-      {/* Context menu — rendered in portal so it's never clipped */}
+      {/* Emoji reaction picker — portal, positioned near bubble */}
+      {emojiPickerOpen && !message.isDeleted && createPortal(
+        <div
+          ref={emojiPickRef}
+          className="msg-reaction-picker"
+          style={{ top: emojiPickerPos.top, left: emojiPickerPos.left }}
+        >
+          {REACTION_EMOJIS.map((emoji) => {
+            const myReaction = message.reactions?.find(
+              (r) => (r.userId?._id?.toString() || r.userId?.toString()) === currentUserId?.toString()
+            );
+            const isActive = myReaction?.emoji === emoji;
+            return (
+              <button
+                key={emoji}
+                className={`reaction-emoji-btn ${isActive ? 'active' : ''}`}
+                onClick={() => { onReact?.(message._id, emoji); setEmojiPickerOpen(false); }}
+                title={emoji}
+              >
+                {emoji}
+              </button>
+            );
+          })}
+          {/* + button */}
+          <button
+            className="reaction-more-btn"
+            onClick={() => setShowFullEmojiPicker((v) => !v)}
+            title="More reactions"
+          >
+            <PlusIcon />
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {/* Full emoji picker — centered in viewport via portal */}
+      {showFullEmojiPicker && !message.isDeleted && createPortal(
+        <div
+          className="rfp-overlay"
+          onMouseDown={(e) => {
+            // Close if clicking the overlay background (not the panel)
+            if (e.target === e.currentTarget) {
+              setShowFullEmojiPicker(false);
+              setEmojiPickerOpen(false);
+            }
+          }}
+        >
+          <ReactionFullPicker
+            onSelect={(emoji) => {
+              onReact?.(message._id, emoji);
+              setShowFullEmojiPicker(false);
+              setEmojiPickerOpen(false);
+            }}
+            onClose={() => { setShowFullEmojiPicker(false); setEmojiPickerOpen(false); }}
+          />
+        </div>,
+        document.body
+      )}
       {menuOpen && createPortal(
         <div
           ref={menuRef}
@@ -220,38 +343,218 @@ export default function MessageBubble({
         document.body
       )}
 
-      {/* WhatsApp-style Delete Dialog */}
-      {deleteDialog && (
-        <div className="modal-overlay" onClick={() => setDeleteDialog(false)}>
-          <div className="delete-dialog" onClick={(e) => e.stopPropagation()}>
-            <p className="delete-dialog-title">Delete message?</p>
-            <div className="delete-dialog-actions">
-              {/* "Delete for everyone" only available within 60 hours of sending */}
-      {isOwn && !message.isDeleted && (Date.now() - new Date(message.createdAt).getTime()) < 4096 * 1000 && (
-                <button
-                  className="delete-btn delete-everyone"
-                  onClick={() => { setDeleteDialog(false); onDelete(message._id, 'everyone'); }}
-                >
-                  Delete for everyone
-                </button>
-              )}
-              <button
-                className="delete-btn delete-me"
-                onClick={() => { setDeleteDialog(false); onDelete(message._id, 'me'); }}
-              >
-                Delete for me
-              </button>
-              <button
-                className="delete-btn delete-cancel"
-                onClick={() => setDeleteDialog(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+    </>
+  );
+}
+
+// WhatsApp's 6 quick reactions
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+// Reaction bar shown below the bubble
+function ReactionBar({ reactions, currentUserId, onReact, isOwn }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [filterEmoji, setFilterEmoji] = useState(null); // null = All
+
+  const groups = reactions.reduce((acc, r) => {
+    const e = r.emoji;
+    if (!acc[e]) acc[e] = { emoji: e, count: 0 };
+    acc[e].count++;
+    return acc;
+  }, {});
+
+  const myReaction = reactions.find(
+    (r) => (r.userId?._id?.toString() || r.userId?.toString()) === currentUserId?.toString()
+  );
+
+  const handleChipClick = (emoji) => {
+    setFilterEmoji(emoji);
+    setDetailsOpen(true);
+  };
+
+  return (
+    <>
+      <div className={`reaction-bar ${isOwn ? 'reaction-bar--own' : 'reaction-bar--other'}`}>
+        {Object.values(groups).map(({ emoji, count }) => (
+          <button
+            key={emoji}
+            className={`reaction-chip ${myReaction?.emoji === emoji ? 'reaction-chip--mine' : ''}`}
+            onClick={() => handleChipClick(emoji)}
+            title={`${count} reaction${count > 1 ? 's' : ''}`}
+          >
+            <span className="reaction-chip-emoji">{emoji}</span>
+            <span className="reaction-chip-count">{count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Reaction details panel — portal, centered */}
+      {detailsOpen && createPortal(
+        <ReactionDetailsPanel
+          reactions={reactions}
+          currentUserId={currentUserId}
+          initialFilter={filterEmoji}
+          onRemove={(emoji) => { onReact(emoji); setDetailsOpen(false); }}
+          onClose={() => setDetailsOpen(false)}
+        />,
+        document.body
       )}
     </>
+  );
+}
+
+// WhatsApp-style reaction details panel
+function ReactionDetailsPanel({ reactions, currentUserId, initialFilter, onRemove, onClose }) {
+  const [filter, setFilter] = useState(initialFilter); // null = All
+
+  // Group by emoji
+  const groups = reactions.reduce((acc, r) => {
+    const e = r.emoji;
+    if (!acc[e]) acc[e] = { emoji: e, users: [] };
+    acc[e].users.push(r);
+    return acc;
+  }, {});
+
+  const totalCount = reactions.length;
+
+  // Filtered list
+  const displayed = filter
+    ? (groups[filter]?.users || [])
+    : reactions;
+
+  return (
+    <div className="rdp-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="rdp-panel" onClick={(e) => e.stopPropagation()}>
+        {/* Title */}
+        <div className="rdp-header">
+          <span className="rdp-title">{totalCount} reaction{totalCount !== 1 ? 's' : ''}</span>
+          <button className="rdp-close" onClick={onClose}>
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
+
+        {/* Filter tabs */}
+        <div className="rdp-tabs">
+          {/* All tab */}
+          <button
+            className={`rdp-tab ${filter === null ? 'rdp-tab--active' : ''}`}
+            onClick={() => setFilter(null)}
+            title="All reactions"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.5"/>
+              <circle cx="9.2" cy="10.2" r="1.1" fill="currentColor"/>
+              <circle cx="14.8" cy="10.2" r="1.1" fill="currentColor"/>
+              <path d="M8.5 14.2 C9.5 16.2 14.5 16.2 15.5 14.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+
+          {/* Per-emoji tabs */}
+          {Object.entries(groups).map(([emoji, { users }]) => (
+            <button
+              key={emoji}
+              className={`rdp-tab rdp-tab--emoji ${filter === emoji ? 'rdp-tab--active' : ''}`}
+              onClick={() => setFilter(emoji)}
+            >
+              <span className="rdp-tab-emoji">{emoji}</span>
+              <span className="rdp-tab-count">{users.length}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* User list */}
+        <div className="rdp-list">
+          {displayed.map((r, i) => {
+            const uid = r.userId?._id?.toString() || r.userId?.toString();
+            const isMe = uid === currentUserId?.toString();
+            const name = r.userId?.username || 'Unknown';
+            const avatar = r.userId?.avatar;
+
+            return (
+              <div
+                key={i}
+                className={`rdp-row ${isMe ? 'rdp-row--me' : ''}`}
+                onClick={isMe ? () => onRemove(r.emoji) : undefined}
+                title={isMe ? 'Click to remove' : undefined}
+              >
+                {/* Avatar */}
+                <div className="rdp-avatar">
+                  {avatar
+                    ? <img src={`http://localhost:5000${avatar}`} alt={name} />
+                    : <DefaultAvatar size="40px" />
+                  }
+                </div>
+
+                {/* Name + subtitle */}
+                <div className="rdp-info">
+                  <span className="rdp-name">{isMe ? 'You' : name}</span>
+                  {isMe && <span className="rdp-sub">Click to remove</span>}
+                </div>
+
+                {/* Emoji on right */}
+                <span className="rdp-emoji">{r.emoji}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Full emoji picker for reactions (uses emoji-picker-react)
+function ReactionFullPicker({ onSelect, onClose }) {
+  const [search, setSearch] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // Emoji categories with common emojis
+  const CATEGORIES = [
+    { label: 'Smileys', emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'] },
+    { label: 'Gestures', emojis: ['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️','💅','🤳','💪','🦾','🦿','🦵','🦶','👂','🦻','👃','🫀','🫁','🧠','🦷','🦴','👀','👁️','👅','👄'] },
+    { label: 'Hearts', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉️','☸️','✡️','🔯','🕎','☯️','☦️','🛐','⛎','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','🆔','⚛️'] },
+    { label: 'Animals', emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐈‍⬛','🪶','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔'] },
+    { label: 'Food', emojis: ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫑','🧄','🧅','🥔','🍠','🥐','🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🫓','🥪','🥙','🧆','🌮','🌯','🫔','🥗','🥘','🫕','🥫','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥮','🍢','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🧃','🥤','🧋','☕','🍵','🫖','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🧉','🍾','🧊','🥄','🍴','🍽️','🥢','🧂'] },
+    { label: 'Travel', emojis: ['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🏍️','🛵','🛺','🚲','🛴','🛹','🛼','🚏','🛣️','🛤️','⛽','🚨','🚥','🚦','🛑','🚧','⚓','🛟','⛵','🚤','🛥️','🛳️','⛴️','🚢','✈️','🛩️','🛫','🛬','🪂','💺','🚁','🚟','🚠','🚡','🛰️','🚀','🛸','🪐','🌍','🌎','🌏','🌐','🗺️','🧭','🏔️','⛰️','🌋','🗻','🏕️','🏖️','🏜️','🏝️','🏞️','🏟️','🏛️','🏗️','🧱','🪨','🪵','🛖','🏘️','🏚️','🏠','🏡','🏢','🏣','🏤','🏥','🏦','🏨','🏩','🏪','🏫','🏬','🏭','🏯','🏰','💒','🗼','🗽','⛪','🕌','🛕','🕍','⛩️','🕋','⛲','⛺','🌁','🌃','🏙️','🌄','🌅','🌆','🌇','🌉','♨️','🎠','🛝','🎡','🎢','💈','🎪'] },
+    { label: 'Objects', emojis: ['⌚','📱','📲','💻','⌨️','🖥️','🖨️','🖱️','🖲️','💽','💾','💿','📀','🧮','📷','📸','📹','🎥','📽️','🎞️','📞','☎️','📟','📠','📺','📻','🧭','⏱️','⏲️','⏰','🕰️','⌛','⏳','📡','🔋','🔌','💡','🔦','🕯️','🪔','🧯','🛢️','💰','💴','💵','💶','💷','💸','💳','🪙','💹','📈','📉','📊','📋','🗒️','🗓️','📆','📅','🗑️','📁','📂','🗂️','🗃️','🗄️','🗑️','📌','📍','✂️','🖊️','🖋️','✒️','🖌️','🖍️','📝','✏️','🔍','🔎','🔏','🔐','🔒','🔓'] },
+  ];
+
+  const allEmojis = CATEGORIES.flatMap((c) => c.emojis);
+  const filtered = search.trim()
+    ? allEmojis.filter((e) => e.includes(search))
+    : null;
+
+  return (
+    <div className="reaction-full-picker-panel" onClick={(e) => e.stopPropagation()}>
+      {/* Search */}
+      <div className="rfp-search">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path fill="#8696a0" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <input ref={inputRef} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search emoji" />
+      </div>
+
+      {/* Emoji grid */}
+      <div className="rfp-body">
+        {filtered ? (
+          <div className="rfp-grid">
+            {filtered.map((e, i) => (
+              <button key={i} className="rfp-emoji" onClick={() => onSelect(e)}>{e}</button>
+            ))}
+            {filtered.length === 0 && <p className="rfp-empty">No results</p>}
+          </div>
+        ) : (
+          CATEGORIES.map((cat) => (
+            <div key={cat.label} className="rfp-category">
+              <p className="rfp-cat-label">{cat.label}</p>
+              <div className="rfp-grid">
+                {cat.emojis.map((e, i) => (
+                  <button key={i} className="rfp-emoji" onClick={() => onSelect(e)}>{e}</button>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -263,6 +566,18 @@ const StarIcon    = ({ starred }) => <svg viewBox="0 0 24 24" width="18" height=
 const PinIcon     = () => <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>;
 const EditIcon    = () => <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>;
 const DeleteIcon  = () => <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>;
-const BlockIcon   = () => <svg viewBox="0 0 24 24" width="14" height="14" style={{marginRight:4,verticalAlign:'middle'}}><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z"/></svg>;
+const BanIcon     = () => <svg viewBox="0 0 24 24" width="13" height="13" style={{flexShrink:0,marginRight:4,opacity:0.6}}><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9A7.902 7.902 0 0 1 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1A7.902 7.902 0 0 1 20 12c0 4.42-3.58 8-8 8z"/></svg>;
+const BlockIcon   = () => null; // legacy alias
+
+const EmojiReactIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.5"/>
+    <circle cx="9.2" cy="10.2" r="1.1" fill="currentColor"/>
+    <circle cx="14.8" cy="10.2" r="1.1" fill="currentColor"/>
+    <path d="M8.5 14.2 C9.5 16.2 14.5 16.2 15.5 14.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+  </svg>
+);
 const ChevronIcon = () => <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>;
 const SelectIcon  = () => <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM17.99 9l-1.41-1.42-6.59 6.59-2.58-2.57-1.42 1.41 4 3.99z"/></svg>;
+const CheckIcon   = () => <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>;
+const PlusIcon    = () => <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>;
