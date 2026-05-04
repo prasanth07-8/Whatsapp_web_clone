@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import api from '../../services/api';
 import ProfilePanel from '../ProfilePanel/ProfilePanel';
 import DefaultAvatar from '../DefaultAvatar';
@@ -31,6 +32,8 @@ export default function Sidebar({
   onMobileBack, onChatUpdated, onChatDeleted,
 }) {
   const { user, logout } = useAuth();
+  const { theme, changeTheme } = useTheme();
+  const [showThemePanel, setShowThemePanel] = useState(false);
   const [search, setSearch]               = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [showProfile, setShowProfile]     = useState(false);
@@ -208,17 +211,6 @@ export default function Sidebar({
             )}
           </button>
 
-          {/* Status */}
-          <div className="nav-btn-wrap">
-            <button
-              className={`nav-btn ${navTab === 'status' ? 'active' : ''}`}
-              onClick={() => setNavTab('status')}
-              title="Status"
-            >
-              <StatusNavIcon />
-            </button>
-            {onlineUsers.length > 1 && <span className="nav-online-dot" />}
-          </div>
 
         </div>
 
@@ -290,6 +282,9 @@ export default function Sidebar({
                     </button>
                     <button className="sidebar-dropdown-item" onClick={() => handleSideMenuAction('markread')}>
                       <MarkReadIcon /> Mark all as read
+                    </button>
+                    <button className="sidebar-dropdown-item" onClick={() => { setShowSideMenu(false); setShowThemePanel(true); }}>
+                      <ThemeMenuIcon /> Theme
                     </button>
                     <button className="sidebar-dropdown-item danger" onClick={() => handleSideMenuAction('logout')}>
                       <LogoutIcon /> Log out
@@ -720,6 +715,42 @@ export default function Sidebar({
           </button>
         </div>
       )}
+
+      {/* ── Theme settings panel ── */}
+      {showThemePanel && (
+        <div className="theme-panel">
+          <div className="theme-panel-header">
+            <button className="theme-panel-back" onClick={() => setShowThemePanel(false)}>
+              <BackIcon />
+            </button>
+            <span>Theme</span>
+          </div>
+          <div className="theme-panel-body">
+            <p className="theme-panel-desc">Choose your preferred theme</p>
+            {[
+              { value: 'dark',   label: 'Dark',   icon: '🌙' },
+              { value: 'light',  label: 'Light',  icon: '☀️' },
+              { value: 'system', label: 'System default', icon: '💻' },
+            ].map(({ value, label, icon }) => (
+              <button
+                key={value}
+                className={`theme-option ${theme === value ? 'theme-option--active' : ''}`}
+                onClick={() => changeTheme(value)}
+              >
+                <span className="theme-option-icon">{icon}</span>
+                <span className="theme-option-label">{label}</span>
+                {theme === value && (
+                  <span className="theme-option-check">
+                    <svg viewBox="0 0 24 24" width="18" height="18">
+                      <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                    </svg>
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -772,6 +803,7 @@ const MediaNavIcon  = () => <svg viewBox="0 0 24 24" width="22" height="22"><pat
 const StarMenuIcon    = () => <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>;
 const MarkReadIcon    = () => <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M18 7l-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12-1.42-1.41zM.41 13.41L6 19l1.41-1.41L1.83 12 .41 13.41z"/></svg>;
 const LogoutIcon      = () => <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>;
+const ThemeMenuIcon   = () => <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>;
 const StarEmptyIcon   = () => <svg viewBox="0 0 24 24" width="48" height="48"><path fill="#8696a0" d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>;
 const SearchEmptyIcon = () => <svg viewBox="0 0 24 24" width="48" height="48"><path fill="#8696a0" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>;
 

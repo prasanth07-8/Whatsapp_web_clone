@@ -106,3 +106,197 @@
   transition: opacity var(--t-fast);
 }
 .login-toggle span:hover { opacity: 0.8; }
+
+/* ── OTP screen ── */
+.otp-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin: 0 0 24px;
+  line-height: 1.6;
+}
+.otp-subtitle strong { color: var(--text-primary); }
+
+.otp-inputs {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.otp-input {
+  width: 44px;
+  height: 52px;
+  border-radius: 10px;
+  border: 2px solid var(--border, var(--bg-input));
+  background: var(--bg-input, var(--bg-input));
+  color: var(--text-primary);
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.15s;
+  caret-color: var(--green);
+}
+.otp-input:focus { border-color: var(--green, #00a884); }
+
+.otp-verify-btn {
+  width: 100%;
+  padding: 13px;
+  background: var(--green, #00a884);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-full, 999px);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 16px;
+  font-family: inherit;
+}
+.otp-verify-btn:hover:not(:disabled) { background: #017561; }
+.otp-verify-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ── WhatsApp-style loading screen ── */
+.wa-loading-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--loading-bg);
+}
+
+.wa-loading-header {
+  background: var(--loading-header-bg);
+  padding: 14px 20px;
+  flex-shrink: 0;
+}
+.wa-loading-header-title {
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.wa-loading-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 32px 24px 48px;
+}
+
+.wa-loading-illustration {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.wa-loading-circle {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--loading-circle-bg);
+  overflow: hidden;
+}
+
+.wa-cloud {
+  position: absolute;
+  background: var(--loading-cloud);
+  border-radius: 50px;
+}
+.wa-cloud-1 { width: 80px; height: 28px; bottom: 30px; left: -10px; }
+.wa-cloud-2 { width: 60px; height: 22px; bottom: 40px; right: -5px; }
+
+.wa-loading-phone {
+  position: relative;
+  z-index: 2;
+  width: 72px;
+  height: 120px;
+  background: var(--loading-phone-body);
+  border-radius: 12px;
+  border: 3px solid rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+
+.wa-loading-phone-screen {
+  width: 60px;
+  height: 108px;
+  background: #00a884;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wa-loading-spinner {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 20px;
+  border: 3px solid transparent;
+  border-bottom-color: #00a884;
+  border-left-color: #00a884;
+  border-radius: 0 0 40px 40px;
+  animation: waSpinArc 1.2s linear infinite;
+  z-index: 3;
+}
+
+@keyframes waSpinArc {
+  0%   { transform: translateX(-50%) rotate(0deg); }
+  100% { transform: translateX(-50%) rotate(360deg); }
+}
+
+.wa-loading-title {
+  color: var(--loading-title);
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 24px 0 8px;
+  text-align: center;
+}
+
+.wa-loading-encrypted {
+  display: flex;
+  align-items: center;
+  color: #00a884;
+  font-size: 0.82rem;
+  margin: 0 0 20px;
+}
+
+.wa-loading-bar-track {
+  width: 260px;
+  height: 3px;
+  background: var(--loading-track);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.wa-loading-bar-fill {
+  height: 100%;
+  background: #00a884;
+  border-radius: 2px;
+  transition: width 0.06s linear;
+}
+
+.wa-loading-subtitle {
+  color: var(--loading-sub);
+  font-size: 0.82rem;
+  margin: 0;
+  text-align: center;
+}
+
+/* ── Registered success screen ── */
+.registered-icon {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 20px;
+}

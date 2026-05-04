@@ -2,58 +2,132 @@
    WhatsApp Web Clone — Global Design System
    ═══════════════════════════════════════════════════ */
 
-/* ── CSS Variables ─────────────────────────────────── */
-:root {
-  /* Backgrounds — exact WhatsApp dark theme values */
-  --bg-deep:    #111b21;   /* app background / sidebar bg */
-  --bg-panel:   #202c33;   /* header, input bar, panels */
-  --bg-input:   #2a3942;   /* search / input fields */
-  --bg-hover:   #2a3942;
-  --bg-active:  #2a3942;
-  --bg-subtle:  #1e2b33;
-  --bg-chat:    #0b141a;   /* chat background */
-  --bg-msg-in:  #202c33;   /* incoming bubble */
-  --bg-msg-out: #005c4b;   /* outgoing bubble */
+/* ── Light theme (default for new users) ──────────── */
+:root,
+[data-theme="light"] {
+  --bg-deep:        #f0f2f5;
+  --bg-panel:       #ffffff;
+  --bg-input:       #f0f2f5;
+  --bg-input-focus: #e9edef;
+  --bg-hover:       #f5f6f6;
+  --bg-active:      #e9edef;
+  --bg-subtle:      #f7f8fa;
+  --bg-chat:        #efeae2;
+  --bg-msg-in:      #ffffff;
+  --bg-msg-out:     #d9fdd3;
+  --bg-elevated:    #ffffff;   /* menus, popups, modals */
+  --bg-elevated2:   #f0f2f5;  /* secondary elevated */
+  --bg-darkest:     #f0f2f5;
+  --border:         #e9edef;
+  --border-mid:     #d1d7db;
+  --text-primary:   #111b21;
+  --text-secondary: #54656f;
+  --text-time:      #667781;
+  --green:          #00a884;
+  --green-dark:     #017561;
+  --green-bg:       rgba(0,168,132,0.08);
+  --blue-tick:      #53bdeb;
+  --red:            #f15c6d;
+  --red-bg:         rgba(241,92,109,0.08);
+  --nav-bg:         #f0f2f5;
+  --loading-bg:         #f0f2f5;
+  --loading-header-bg:  #00a884;
+  --loading-title:      #111b21;
+  --loading-sub:        #54656f;
+  --loading-track:      #d1d7db;
+  --loading-circle-bg:  #d9f5ee;
+  --loading-cloud:      rgba(255,255,255,0.7);
+  --loading-phone-body: #1a1a2e;
+}
 
-  /* Borders */
-  --border:     #2a3942;
-  --border-mid: #3b4a54;
-
-  /* Text */
+/* ── Dark theme ────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg-deep:        #111b21;
+  --bg-panel:       #202c33;
+  --bg-input:       #2a3942;
+  --bg-input-focus: #324048;
+  --bg-hover:       #2a3942;
+  --bg-active:      #2a3942;
+  --bg-subtle:      #1e2b33;
+  --bg-chat:        #0b141a;
+  --bg-msg-in:      #202c33;
+  --bg-msg-out:     #005c4b;
+  --bg-elevated:    #233138;  /* menus, popups, modals */
+  --bg-elevated2:   #1f2c34;  /* secondary elevated */
+  --bg-darkest:     #111b21;
+  --border:         #2a3942;
+  --border-mid:     #3b4a54;
   --text-primary:   #e9edef;
   --text-secondary: #8696a0;
   --text-time:      #8696a0;
+  --green:          #00a884;
+  --green-dark:     #017561;
+  --green-bg:       rgba(0,168,132,0.1);
+  --blue-tick:      #53bdeb;
+  --red:            #f15c6d;
+  --red-bg:         rgba(241,92,109,0.08);
+  --nav-bg:         #1f2c34;
+  --nav-bg:         #1f2c34;
+  --loading-bg:         #111b21;
+  --loading-header-bg:  #1f2c34;
+  --loading-title:      #e9edef;
+  --loading-sub:        #8696a0;
+  --loading-track:      #2a3942;
+  --loading-circle-bg:  #1a2e26;
+  --loading-cloud:      rgba(255,255,255,0.06);
+  --loading-phone-body: #0d1b22;
+}
 
-  /* Accent */
-  --green:      #00a884;   /* WhatsApp teal */
+/* ── Light theme ───────────────────────────────────── */
+[data-theme="light"] {
+  --bg-deep:    #f0f2f5;
+  --bg-panel:   #ffffff;
+  --bg-input:   #f0f2f5;
+  --bg-hover:   #f5f6f6;
+  --bg-active:  #e9edef;
+  --bg-subtle:  #f7f8fa;
+  --bg-chat:    #efeae2;
+  --bg-msg-in:  #ffffff;
+  --bg-msg-out: #d9fdd3;
+  --border:     #e9edef;
+  --border-mid: #d1d7db;
+  --text-primary:   #111b21;
+  --text-secondary: #54656f;
+  --text-time:      #667781;
+  --green:      #00a884;
   --green-dark: #017561;
-  --green-bg:   rgba(0,168,132,0.1);
-  --blue-tick:  #53bdeb;   /* read receipt blue */
+  --green-bg:   rgba(0,168,132,0.08);
+  --blue-tick:  #53bdeb;
   --red:        #f15c6d;
   --red-bg:     rgba(241,92,109,0.08);
+  /* Loading screen */
+  --loading-bg:         #f0f2f5;
+  --loading-header-bg:  #00a884;
+  --loading-title:      #111b21;
+  --loading-sub:        #54656f;
+  --loading-track:      #d1d7db;
+  --loading-circle-bg:  #d9f5ee;
+  --loading-cloud:      rgba(255,255,255,0.7);
+  --loading-phone-body: #1a1a2e;
+}
 
-  /* Typography */
+/* ── Shared variables (theme-independent) ─────────── */
+:root {
   --font:       'Segoe UI', system-ui, -apple-system, sans-serif;
-  --text-xs:    0.6875rem;  /* 11px */
-  --text-sm:    0.75rem;    /* 12px */
-  --text-base:  0.875rem;   /* 14px */
-  --text-md:    0.9375rem;  /* 15px — WhatsApp body */
-  --text-lg:    1rem;       /* 16px */
-  --text-xl:    1.125rem;   /* 18px */
-
-  /* Radius */
+  --text-xs:    0.6875rem;
+  --text-sm:    0.75rem;
+  --text-base:  0.875rem;
+  --text-md:    0.9375rem;
+  --text-lg:    1rem;
+  --text-xl:    1.125rem;
   --radius-sm:  4px;
   --radius-md:  8px;
   --radius-lg:  12px;
   --radius-pill:24px;
   --radius-full:50%;
-
-  /* Transitions */
   --t-fast:  0.12s ease;
   --t-base:  0.18s ease;
   --t-slow:  0.25s ease;
-
-  /* Shadows */
   --shadow-sm:  0 1px 2px rgba(0,0,0,0.3);
   --shadow-md:  0 4px 16px rgba(0,0,0,0.4);
   --shadow-lg:  0 8px 32px rgba(0,0,0,0.5);

@@ -150,7 +150,7 @@
 /* Context menu — fixed portal */
 .msg-context-menu {
   position: fixed;
-  background: #233138;
+  background: var(--bg-elevated);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   z-index: 9999;
@@ -187,7 +187,7 @@
 
 /* Delete dialog */
 .delete-dialog {
-  background: #233138;
+  background: var(--bg-elevated);
   border-radius: var(--radius-lg);
   width: 320px;
   overflow: hidden;
@@ -286,7 +286,7 @@ mark.highlight {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: rgba(233, 237, 239, 0.75);
+  color: var(--text-secondary);
   flex-shrink: 0;
   animation: emojiBtnIn2 0.12s ease;
   transition: color 0.12s, transform 0.12s;
@@ -311,7 +311,7 @@ mark.highlight {
 /* Reaction quick-pick popup — fixed portal */
 .msg-reaction-picker {
   position: fixed;
-  background: #233138;
+  background: var(--bg-elevated);
   border-radius: 999px;
   padding: 5px 8px;
   display: flex;
@@ -357,12 +357,12 @@ mark.highlight {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #aebac1;
+  color: var(--text-secondary);
   margin-left: 2px;
   transition: background 0.12s, color 0.12s;
   flex-shrink: 0;
 }
-.reaction-more-btn:hover { background: rgba(255,255,255,0.18); color: #e9edef; }
+.reaction-more-btn:hover { background: rgba(255,255,255,0.18); color: var(--text-primary); }
 
 /* ── Full emoji picker — centered overlay in chat window ── */
 .rfp-overlay {
@@ -376,7 +376,7 @@ mark.highlight {
 }
 
 .reaction-full-picker-panel {
-  background: #1f2c34;
+  background: var(--bg-elevated2);
   border-radius: 14px;
   width: 320px;
   height: 420px;
@@ -397,8 +397,8 @@ mark.highlight {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: #2a3942;
-  border-bottom: 1px solid #3b4a54;
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border-mid);
   flex-shrink: 0;
 }
 .rfp-search input {
@@ -406,23 +406,23 @@ mark.highlight {
   background: none;
   border: none;
   outline: none;
-  color: #e9edef;
+  color: var(--text-primary);
   font-size: 0.9rem;
   font-family: inherit;
 }
-.rfp-search input::placeholder { color: #8696a0; }
+.rfp-search input::placeholder { color: var(--text-secondary); }
 
 .rfp-body {
   flex: 1;
   overflow-y: auto;
   padding: 8px 8px 12px;
   scrollbar-width: thin;
-  scrollbar-color: #3b4a54 transparent;
+  scrollbar-color: var(--border-mid) transparent;
 }
 
 .rfp-category { margin-bottom: 8px; }
 .rfp-cat-label {
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -453,7 +453,7 @@ mark.highlight {
 .rfp-emoji:hover { background: rgba(255,255,255,0.1); transform: scale(1.25); }
 
 .rfp-empty {
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   text-align: center;
   padding: 20px;
@@ -476,7 +476,7 @@ mark.highlight {
   display: flex;
   align-items: center;
   gap: 3px;
-  background: #233138;
+  background: var(--bg-elevated);
   border: 1.5px solid transparent;
   border-radius: 999px;
   padding: 3px 8px 3px 6px;
@@ -484,7 +484,7 @@ mark.highlight {
   transition: background 0.12s, border-color 0.12s, transform 0.1s;
   line-height: 1;
 }
-.reaction-chip:hover { background: #2a3942; transform: scale(1.05); }
+.reaction-chip:hover { background: var(--bg-input); transform: scale(1.05); }
 .reaction-chip--mine {
   border-color: var(--green, #00a884);
   background: rgba(0,168,132,0.12);
@@ -492,7 +492,7 @@ mark.highlight {
 
 .reaction-chip-emoji { font-size: 1rem; line-height: 1; }
 .reaction-chip-count {
-  color: #e9edef;
+  color: var(--text-primary);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
@@ -517,7 +517,7 @@ mark.highlight {
 }
 
 .rdp-panel {
-  background: #111b21;
+  background: var(--bg-deep);
   border-radius: 14px;
   width: 340px;
   max-height: 480px;
@@ -543,7 +543,7 @@ mark.highlight {
 }
 
 .rdp-title {
-  color: #e9edef;
+  color: var(--text-primary);
   font-size: 1rem;
   font-weight: 600;
 }
@@ -551,7 +551,7 @@ mark.highlight {
 .rdp-close {
   background: none;
   border: none;
-  color: #8696a0;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -559,7 +559,7 @@ mark.highlight {
   border-radius: 50%;
   transition: color 0.12s, background 0.12s;
 }
-.rdp-close:hover { color: #e9edef; background: rgba(255,255,255,0.08); }
+.rdp-close:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
 
 /* Filter tabs */
 .rdp-tabs {
@@ -567,7 +567,7 @@ mark.highlight {
   align-items: center;
   gap: 6px;
   padding: 0 16px 12px;
-  border-bottom: 1px solid #2a3942;
+  border-bottom: 1px solid var(--bg-input);
   flex-shrink: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -580,7 +580,7 @@ mark.highlight {
   border-radius: 999px;
   padding: 6px 10px;
   cursor: pointer;
-  color: #8696a0;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 5px;
@@ -588,7 +588,7 @@ mark.highlight {
   flex-shrink: 0;
   font-size: 0.85rem;
 }
-.rdp-tab:hover { background: rgba(255,255,255,0.12); color: #e9edef; }
+.rdp-tab:hover { background: rgba(255,255,255,0.12); color: var(--text-primary); }
 .rdp-tab--active {
   background: #00a884;
   color: #fff;
@@ -605,7 +605,7 @@ mark.highlight {
   overflow-y: auto;
   padding: 4px 0 8px;
   scrollbar-width: thin;
-  scrollbar-color: #2a3942 transparent;
+  scrollbar-color: var(--bg-input) transparent;
 }
 
 .rdp-row {
@@ -626,7 +626,7 @@ mark.highlight {
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
-  background: #3b4a54;
+  background: var(--border-mid);
 }
 .rdp-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
@@ -639,13 +639,13 @@ mark.highlight {
 }
 
 .rdp-name {
-  color: #e9edef;
+  color: var(--text-primary);
   font-size: 0.95rem;
   font-weight: 500;
 }
 
 .rdp-sub {
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.8rem;
 }
 

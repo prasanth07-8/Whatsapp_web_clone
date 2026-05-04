@@ -9,7 +9,7 @@
 }
 
 .modal-sheet {
-  background: #202c33;
+  background: var(--bg-panel);
   border-radius: 12px;
   width: 420px;
   max-height: 85vh;
@@ -30,14 +30,14 @@
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  background: #2a3942;
-  border-bottom: 1px solid #3b4a54;
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border-mid);
   flex-shrink: 0;
 }
 
 .modal-sheet-header span {
   flex: 1;
-  color: #e9edef;
+  color: var(--text-primary);
   font-size: 1rem;
   font-weight: 600;
 }
@@ -45,14 +45,14 @@
 .modal-back {
   background: none;
   border: none;
-  color: #8696a0;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 1rem;
   padding: 4px 8px;
   border-radius: 4px;
   transition: color 0.15s;
 }
-.modal-back:hover { color: #e9edef; }
+.modal-back:hover { color: var(--text-primary); }
 
 .modal-send-btn {
   background: #00a884;
@@ -66,7 +66,7 @@
   transition: background 0.15s;
 }
 .modal-send-btn:hover:not(:disabled) { background: #017561; }
-.modal-send-btn:disabled { background: #3b4a54; cursor: not-allowed; }
+.modal-send-btn:disabled { background: var(--border-mid); cursor: not-allowed; }
 
 .modal-sheet-body {
   padding: 16px;
@@ -77,7 +77,7 @@
 }
 
 .modal-sheet-body::-webkit-scrollbar { width: 4px; }
-.modal-sheet-body::-webkit-scrollbar-thumb { background: #3b4a54; border-radius: 2px; }
+.modal-sheet-body::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 2px; }
 
 .modal-field {
   display: flex;
@@ -87,7 +87,7 @@
 }
 
 .modal-field label {
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -95,11 +95,11 @@
 
 .modal-field input,
 .modal-field textarea {
-  background: #2a3942;
-  border: 1px solid #3b4a54;
+  background: var(--bg-input);
+  border: 1px solid var(--border-mid);
   border-radius: 8px;
   padding: 10px 12px;
-  color: #e9edef;
+  color: var(--text-primary);
   font-size: 0.9rem;
   outline: none;
   transition: border-color 0.15s;
@@ -110,18 +110,18 @@
 .modal-field input:focus,
 .modal-field textarea:focus { border-color: #00a884; }
 .modal-field input::placeholder,
-.modal-field textarea::placeholder { color: #8696a0; }
+.modal-field textarea::placeholder { color: var(--text-secondary); }
 
 .modal-char {
   position: absolute;
   right: 10px;
   bottom: 10px;
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.72rem;
 }
 
 .modal-section-label {
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -139,7 +139,7 @@
 .modal-remove-opt {
   background: none;
   border: none;
-  color: #8696a0;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.85rem;
   padding: 4px 6px;
@@ -151,7 +151,7 @@
 
 .modal-add-option {
   background: none;
-  border: 1px dashed #3b4a54;
+  border: 1px dashed var(--border-mid);
   border-radius: 8px;
   color: #00a884;
   padding: 9px;
@@ -166,7 +166,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 4px 0;
-  color: #e9edef;
+  color: var(--text-primary);
   font-size: 0.9rem;
 }
 
@@ -176,7 +176,7 @@
 .toggle-slider {
   position: absolute;
   inset: 0;
-  background: #3b4a54;
+  background: var(--border-mid);
   border-radius: 24px;
   cursor: pointer;
   transition: background 0.2s;
@@ -198,8 +198,8 @@
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: #3b4a54;
-  color: #e9edef;
+  background: var(--border-mid);
+  color: var(--text-primary);
   font-size: 2rem;
   font-weight: 700;
   display: flex;
@@ -243,7 +243,7 @@
 
 .event-preview-day {
   background: #fff;
-  color: #111b21;
+  color: var(--bg-deep);
   font-size: 1.1rem;
   font-weight: 700;
   width: 100%;
@@ -261,7 +261,7 @@
 }
 
 .event-preview-title {
-  color: #e9edef;
+  color: var(--text-primary);
   font-size: 0.9rem;
   font-weight: 600;
   white-space: nowrap;
@@ -271,7 +271,7 @@
 
 .event-preview-date,
 .event-preview-loc {
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.78rem;
 }
 
@@ -290,7 +290,7 @@
 }
 
 .poll-options-hint {
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.72rem;
   text-transform: none;
   letter-spacing: 0;
@@ -304,7 +304,7 @@
 }
 
 .poll-option-num {
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.82rem;
   width: 16px;
   text-align: center;
@@ -313,23 +313,23 @@
 
 .poll-option-input {
   flex: 1;
-  background: #2a3942;
-  border: 1px solid #3b4a54;
+  background: var(--bg-input);
+  border: 1px solid var(--border-mid);
   border-radius: 8px;
   padding: 9px 12px;
-  color: #e9edef;
+  color: var(--text-primary);
   font-size: 0.9rem;
   outline: none;
   transition: border-color 0.15s;
   font-family: inherit;
 }
 .poll-option-input:focus { border-color: #00a884; }
-.poll-option-input::placeholder { color: #8696a0; }
+.poll-option-input::placeholder { color: var(--text-secondary); }
 
 .poll-remove-btn {
   background: none;
   border: none;
-  color: #8696a0;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 4px;
   border-radius: 50%;
@@ -345,5 +345,5 @@
   flex-direction: column;
   gap: 2px;
 }
-.poll-toggle-label { color: #e9edef; font-size: 0.9rem; }
-.poll-toggle-sub   { color: #8696a0; font-size: 0.75rem; }
+.poll-toggle-label { color: var(--text-primary); font-size: 0.9rem; }
+.poll-toggle-sub   { color: var(--text-secondary); font-size: 0.75rem; }

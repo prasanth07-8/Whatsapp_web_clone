@@ -6,7 +6,7 @@
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  background: #233138;
+  background: var(--bg-elevated);
   width: 320px;
   animation: fadeUp 0.15s ease;
 }
@@ -20,7 +20,7 @@
 .emoji-tabs {
   display: flex;
   background: #1e2b33;
-  border-bottom: 1px solid #2a3942;
+  border-bottom: 1px solid var(--bg-input);
 }
 
 .emoji-tab {
@@ -32,13 +32,13 @@
   padding: 10px 6px;
   background: none;
   border: none;
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.78rem;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: color 0.15s, border-color 0.15s;
 }
-.emoji-tab:hover { color: #e9edef; }
+.emoji-tab:hover { color: var(--text-primary); }
 .emoji-tab.active { color: #00a884; border-bottom-color: #00a884; }
 
 /* Emoji picker wrapper */
@@ -54,11 +54,11 @@
   gap: 4px;
   padding: 6px 12px;
   background: #1e2b33;
-  border-top: 1px solid #2a3942;
+  border-top: 1px solid var(--bg-input);
 }
 
 .skin-tone-label {
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.72rem;
   margin-right: 4px;
   flex-shrink: 0;
@@ -79,7 +79,7 @@
   padding: 0;
 }
 .skin-btn.active { border-color: #00a884; }
-.skin-btn:hover  { border-color: #3b4a54; }
+.skin-btn:hover  { border-color: var(--border-mid); }
 
 /* GIF / Sticker panel */
 .gif-panel {
@@ -91,21 +91,21 @@
 
 .gif-search-wrap {
   padding: 8px 12px;
-  border-bottom: 1px solid #2a3942;
+  border-bottom: 1px solid var(--bg-input);
 }
 
 .gif-search-input {
   width: 100%;
-  background: #2a3942;
+  background: var(--bg-input);
   border: none;
   border-radius: 8px;
   padding: 8px 12px;
-  color: #e9edef;
+  color: var(--text-primary);
   font-size: 0.875rem;
   outline: none;
   box-sizing: border-box;
 }
-.gif-search-input::placeholder { color: #8696a0; }
+.gif-search-input::placeholder { color: var(--text-secondary); }
 
 .gif-categories {
   display: flex;
@@ -115,21 +115,21 @@
   flex-shrink: 0;
 }
 .gif-categories::-webkit-scrollbar { height: 3px; }
-.gif-categories::-webkit-scrollbar-thumb { background: #3b4a54; }
+.gif-categories::-webkit-scrollbar-thumb { background: var(--border-mid); }
 
 .gif-cat-btn {
-  background: #2a3942;
+  background: var(--bg-input);
   border: none;
   border-radius: 16px;
   padding: 5px 12px;
-  color: #e9edef;
+  color: var(--text-primary);
   font-size: 0.78rem;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s;
   text-transform: capitalize;
 }
-.gif-cat-btn:hover { background: #3b4a54; }
+.gif-cat-btn:hover { background: var(--border-mid); }
 
 .gif-grid-empty {
   flex: 1;
@@ -137,7 +137,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #8696a0;
+  color: var(--text-secondary);
   font-size: 0.88rem;
   gap: 6px;
   padding: 16px;
@@ -148,6 +148,6 @@
 
 .gif-note {
   font-size: 0.75rem;
-  color: #3b4a54;
+  color: var(--border-mid);
   line-height: 1.5;
 }

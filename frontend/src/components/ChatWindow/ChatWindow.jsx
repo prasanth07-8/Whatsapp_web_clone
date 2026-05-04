@@ -702,9 +702,9 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
         </div>
       )}
 
-      {/* Search bar */}
+      {/* Search bar — mobile only (desktop uses side panel) */}
       {searchOpen && (
-        <div className="chat-search-bar">
+        <div className="chat-search-bar chat-search-bar--mobile">
           <input ref={searchRef} value={searchTerm}
             onChange={(e) => { setSearchTerm(e.target.value); setSearchIdx(0); }}
             placeholder="Search messages..." />
@@ -954,6 +954,132 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
         onDeleteChat={() => { setShowContactInfo(false); handleChatMenuAction('delete'); }}
       />
     )}
+
+    {/* Search panel — desktop right-side panel */}
+    {searchOpen && (
+      <SearchPanel
+        messages={messages}
+        searchTerm={searchTerm}
+        onSearchChange={(val) => { setSearchTerm(val); setSearchIdx(0); }}
+        onClose={() => { setSearchOpen(false); setSearchTerm(''); }}
+        onResultClick={(msgIndex) => {
+          setSearchIdx(msgIndex);
+          document.getElementById(`msg-${msgIndex}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }}
+        filteredIndexes={filteredIndexes}
+        activeIndex={searchIdx}
+      />
+    )}
+    </div>
+  );
+}
+
+// ── Search Panel — desktop right-side panel ──────────
+function SearchPanel({ messages, searchTerm, onSearchChange, onClose, onResultClick, filteredIndexes, activeIndex }) {
+  const inputRef = useRef(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // Group results by date
+  const groupedResults = filteredIndexes.reduce((acc, idx) => {
+    const msg = messages[idx];
+    if (!msg) return acc;
+    const dateKey = new Date(msg.createdAt).toLocaleDateString([], {
+      day: 'numeric', month: 'long', year: 'numeric',
+    });
+    if (!acc[dateKey]) acc[dateKey] = [];
+    acc[dateKey].push({ idx, msg });
+    return acc;
+  }, {});
+
+  const highlightText = (text, term) => {
+    if (!term?.trim() || !text) return text;
+    const parts = text.split(new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+    return parts.map((part, i) =>
+      part.toLowerCase() === term.toLowerCase()
+        ? <mark key={i} className="sp-highlight">{part}</mark>
+        : part
+    );
+  };
+
+  const getPreview = (msg) => {
+    if (msg.isDeleted) return 'This message was deleted';
+    if (msg.mediaType === 'image') return '📷 Photo';
+    if (msg.mediaType === 'video') return '🎥 Video';
+    if (msg.mediaType === 'audio') return '🎤 Voice message';
+    if (msg.mediaType === 'file')  return `📄 ${msg.mediaName || 'Document'}`;
+    if (msg.messageType === 'poll') return '📊 Poll';
+    return msg.text || '';
+  };
+
+  return (
+    <div className="search-panel">
+      {/* Header */}
+      <div className="search-panel-header">
+        <button className="search-panel-close" onClick={onClose} title="Close">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+        <span className="search-panel-title">Search messages</span>
+      </div>
+
+      {/* Search input */}
+      <div className="search-panel-input-wrap">
+        <svg viewBox="0 0 24 24" width="16" height="16" className="search-panel-icon">
+          <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+        </svg>
+        <input
+          ref={inputRef}
+          className="search-panel-input"
+          value={searchTerm}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search..."
+        />
+        {searchTerm && (
+          <button className="search-panel-clear" onClick={() => onSearchChange('')}>
+            <svg viewBox="0 0 24 24" width="16" height="16">
+              <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Results */}
+      <div className="search-panel-results">
+        {!searchTerm.trim() ? (
+          <div className="search-panel-empty">
+            <svg viewBox="0 0 24 24" width="40" height="40" style={{opacity:0.3}}>
+              <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            </svg>
+            <p>Search for messages</p>
+          </div>
+        ) : filteredIndexes.length === 0 ? (
+          <div className="search-panel-empty">
+            <p>No results for "{searchTerm}"</p>
+          </div>
+        ) : (
+          Object.entries(groupedResults).map(([dateKey, items]) => (
+            <div key={dateKey} className="search-panel-group">
+              <div className="search-panel-date">{dateKey}</div>
+              {items.map(({ idx, msg }) => (
+                <button
+                  key={msg._id}
+                  className={`search-panel-result ${idx === filteredIndexes[activeIndex] ? 'search-panel-result--active' : ''}`}
+                  onClick={() => onResultClick(idx)}
+                >
+                  <div className="spr-time">
+                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <div className="spr-preview">
+                    {highlightText(getPreview(msg), searchTerm)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }
