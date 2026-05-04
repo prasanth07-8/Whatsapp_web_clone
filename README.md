@@ -337,12 +337,12 @@ This project uses **MongoDB Atlas** as the cloud database. You need your own fre
 
 Your connection string will look like:
 ```
-mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/?retryWrites=true&w=majority
 ```
 
-Replace `<username>` and `<password>` with your database user credentials, and add a database name:
+Replace `USERNAME`, `PASSWORD` with your database user credentials, and add a database name:
 ```
-mongodb+srv://myuser:mypassword@cluster0.xxxxx.mongodb.net/whatsapp-clone?retryWrites=true&w=majority
+mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/whatsapp-clone?retryWrites=true&w=majority
 ```
 
 ---
@@ -381,7 +381,7 @@ Now open `backend/.env` and fill in your values:
 
 ```env
 PORT=5000
-MONGO_URI=mongodb+srv://youruser:yourpassword@cluster0.xxxxx.mongodb.net/whatsapp-clone?retryWrites=true&w=majority
+MONGO_URI=mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/whatsapp-clone?retryWrites=true&w=majority
 JWT_SECRET=any_long_random_string_minimum_32_characters
 CLIENT_URL=http://localhost:5173
 EMAIL_USER=your_gmail@gmail.com
