@@ -169,9 +169,6 @@ export default function ContactInfo({ contact, isOnline, lastSeen, mediaMessages
           </button>
         )}
 
-        <button className="ci-action-btn danger">
-          <ReportIcon /><span>Report {contact?.username}</span>
-        </button>
       </div>
     </div>
   );
