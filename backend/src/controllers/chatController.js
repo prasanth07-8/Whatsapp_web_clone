@@ -4,26 +4,33 @@ const Message = require('../models/Message');
 // Get or create "Message Yourself" / Saved Messages chat
 exports.accessSavedMessages = async (req, res) => {
   try {
-    let chat = await Chat.findOne({
+    // Find all saved-messages chats for this user (handle legacy duplicates)
+    const allSaved = await Chat.find({
       isSavedMessages: true,
       participants: req.userId,
-    })
-      .populate('participants', '-password')
-      .populate({ path: 'lastMessage', populate: { path: 'senderId', select: 'username' } });
+    }).sort({ createdAt: 1 });
+
+    // If duplicates exist, delete all but the oldest
+    if (allSaved.length > 1) {
+      const toDelete = allSaved.slice(1).map(c => c._id);
+      await Chat.deleteMany({ _id: { $in: toDelete } });
+    }
+
+    let chat = allSaved[0] || null;
 
     if (!chat) {
       chat = await Chat.create({
         participants: [req.userId],
         isSavedMessages: true,
       });
-      chat = await Chat.findById(chat._id).populate('participants', '-password');
-    } else if (chat.deletedFor.map(String).includes(req.userId)) {
+    } else if (chat.deletedFor?.map(String).includes(req.userId)) {
       chat.deletedFor = chat.deletedFor.filter(id => id.toString() !== req.userId);
       await chat.save();
-      chat = await Chat.findById(chat._id)
-        .populate('participants', '-password')
-        .populate({ path: 'lastMessage', populate: { path: 'senderId', select: 'username' } });
     }
+
+    chat = await Chat.findById(chat._id)
+      .populate('participants', '-password')
+      .populate({ path: 'lastMessage', populate: { path: 'senderId', select: 'username' } });
 
     res.json(chat);
   } catch (err) {
@@ -89,7 +96,8 @@ exports.getChats = async (req, res) => {
       const isFavourite = chat.favouritedBy?.some(id => id.toString() === req.userId) || false;
       const isPinned    = chat.pinnedBy?.some(id => id.toString() === req.userId) || false;
       const isArchived  = chat.archivedBy?.some(id => id.toString() === req.userId) || false;
-      return { ...chat.toObject(), unreadCount, isFavourite, isPinned, isArchived };
+      const draft       = chat.drafts?.find(d => d.userId.toString() === req.userId)?.text || '';
+      return { ...chat.toObject(), unreadCount, isFavourite, isPinned, isArchived, draft };
     }));
 
     res.json(withUnread);
@@ -212,6 +220,36 @@ exports.markChatRead = async (req, res) => {
       { status: 'read' }
     );
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Save or clear draft for a chat
+exports.saveDraft = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const { text } = req.body; // empty string = clear draft
+
+    const chat = await Chat.findById(chatId);
+    if (!chat) return res.status(404).json({ message: 'Chat not found' });
+
+    if (!chat.drafts) chat.drafts = [];
+
+    const existing = chat.drafts.find(d => d.userId.toString() === req.userId);
+    if (text && text.trim()) {
+      if (existing) {
+        existing.text = text.trim();
+      } else {
+        chat.drafts.push({ userId: req.userId, text: text.trim() });
+      }
+    } else {
+      // Clear draft
+      chat.drafts = chat.drafts.filter(d => d.userId.toString() !== req.userId);
+    }
+
+    await chat.save();
+    res.json({ success: true, draft: text?.trim() || '' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

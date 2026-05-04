@@ -19,7 +19,7 @@
 /* Tab bar */
 .emoji-tabs {
   display: flex;
-  background: #1e2b33;
+  background: var(--bg-subtle);
   border-bottom: 1px solid var(--bg-input);
 }
 
@@ -53,7 +53,7 @@
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: #1e2b33;
+  background: var(--bg-subtle);
   border-top: 1px solid var(--bg-input);
 }
 

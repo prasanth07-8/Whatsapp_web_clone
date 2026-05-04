@@ -30,7 +30,7 @@ function formatLastSeen(lastSeen) {
   return `last seen ${date.toLocaleDateString([], { day: 'numeric', month: 'short' })}`;
 }
 
-export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, lastSeenMap, onChatDeleted, incomingMsg, onIncomingMsgHandled, onMobileBack }) {
+export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, lastSeenMap, onChatDeleted, incomingMsg, onIncomingMsgHandled, onMobileBack, onDraftChange }) {
   const { user } = useAuth();
   const [messages, setMessages]       = useState([]);
   const [firstUnreadIdx, setFirstUnreadIdx] = useState(-1);
@@ -66,6 +66,8 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
   const typingTimeout = useRef(null);
   const searchRef     = useRef(null);
   const inputRef      = useRef(null);
+  const prevChatIdRef = useRef(null); // track previous chat for draft saving
+  const textRef       = useRef('');   // mirror of text for use in cleanup
 
   const isSavedMessages = chat?.isSavedMessages || false;
   const otherUser = isSavedMessages ? null : chat?.participants?.find((p) => p._id !== user._id);
@@ -96,14 +98,27 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
   // Fetch messages + mark read
   useEffect(() => {
     if (!chat) return;
+
+    // Save draft for the previous chat before switching
+    const prevId = prevChatIdRef.current;
+    if (prevId && prevId !== chat._id) {
+      const draftText = textRef.current;
+      api.put(`/chats/${prevId}/draft`, { text: draftText }).catch(() => {});
+    }
+    prevChatIdRef.current = chat._id;
+
     setSearchOpen(false); setSearchTerm(''); setReplyTo(null);
     setEditMsg(null); setSelectMode(false); setSelectedIds(new Set());
     setPinnedOpen(false); setShowContactInfo(false);
 
+    // Restore draft for this chat
+    const savedDraft = chat.draft || '';
+    setText(savedDraft);
+    textRef.current = savedDraft;
+
     api.get(`/messages/${chat._id}`).then((res) => {
       const msgs = res.data;
       setMessages(msgs);
-      // Find first unread message sent by the other user
       const idx = msgs.findIndex(
         (m) => (m.senderId?._id?.toString() !== user._id?.toString() && m.senderId?.toString() !== user._id?.toString()) && m.status !== 'read'
       );
@@ -113,10 +128,15 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
     socket?.emit('join_room', chat._id);
     api.put(`/messages/${chat._id}/read`).then(() => {
       socket?.emit('messages_read', { chatId: chat._id, senderId: otherUser?._id });
-      // Clear divider after a short delay so user sees it briefly
       setTimeout(() => setFirstUnreadIdx(-1), 2000);
     });
-    return () => socket?.emit('leave_room', chat._id);
+    return () => {
+      socket?.emit('leave_room', chat._id);
+      // Save draft on unmount/chat-switch
+      const finalDraft = textRef.current;
+      api.put(`/chats/${chat._id}/draft`, { text: finalDraft }).catch(() => {});
+      onDraftChange?.(chat._id, finalDraft);
+    };
   }, [chat?._id]);
 
   // Socket listeners
@@ -254,11 +274,16 @@ export default function ChatWindow({ chat, socket, onMessageSent, onlineUsers, l
       }
       socket?.emit('stop_typing', chat._id);
       setText('');
+      textRef.current = '';
+      // Clear draft from DB after sending
+      api.put(`/chats/${chat._id}/draft`, { text: '' }).catch(() => {});
+      onDraftChange?.(chat._id, '');
     } catch (err) { console.error(err); }
   };
 
   const handleTypingInput = (e) => {
     setText(e.target.value);
+    textRef.current = e.target.value;
     if (!typing) { setTyping(true); socket?.emit('typing', { chatId: chat._id, username: user.username }); }
     clearTimeout(typingTimeout.current);
     typingTimeout.current = setTimeout(() => { socket?.emit('stop_typing', chat._id); setTyping(false); }, 1500);

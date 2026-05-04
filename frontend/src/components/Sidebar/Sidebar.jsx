@@ -482,6 +482,11 @@ export default function Sidebar({
                       <div className="chat-row-bottom">
                         {isTyping ? (
                           <span className="chat-last chat-typing-label">typing...</span>
+                        ) : chat.draft ? (
+                          <span className="chat-last chat-draft-preview">
+                            <span className="chat-draft-label">Draft: </span>
+                            {chat.draft}
+                          </span>
                         ) : (
                           <span className={`chat-last ${unread > 0 ? 'chat-last-unread' : ''}`}>
                             {getLastMsgPreview(lastMsg, user._id)}

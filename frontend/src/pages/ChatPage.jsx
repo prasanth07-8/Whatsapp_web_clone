@@ -169,8 +169,17 @@ export default function ChatPage() {
     // Ensure saved messages chat exists, then load all chats
     api.post('/chats/saved').then(() => {
       api.get('/chats').then((res) => {
+        // Deduplicate: keep only the first isSavedMessages chat
+        const seen = new Set();
+        const deduped = res.data.filter((chat) => {
+          if (chat.isSavedMessages) {
+            if (seen.has('saved')) return false;
+            seen.add('saved');
+          }
+          return true;
+        });
         // Sort: saved messages first, then by updatedAt
-        const sorted = [...res.data].sort((a, b) => {
+        const sorted = [...deduped].sort((a, b) => {
           if (a.isSavedMessages) return -1;
           if (b.isSavedMessages) return 1;
           return new Date(b.updatedAt) - new Date(a.updatedAt);
@@ -268,6 +277,9 @@ export default function ChatPage() {
         incomingMsg={incomingMsg}
         onIncomingMsgHandled={() => setIncomingMsg(null)}
         onMobileBack={() => setActiveChat(null)}
+        onDraftChange={(chatId, draft) => {
+          setChats((prev) => prev.map((c) => c._id === chatId ? { ...c, draft } : c));
+        }}
       />
     </div>
   );

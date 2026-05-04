@@ -60,7 +60,7 @@
 
 .login-form input:focus {
   border-color: var(--green);
-  background: #324048;
+  background: var(--bg-input-focus, var(--bg-input));
 }
 
 .login-form input::placeholder { color: var(--text-secondary); }
