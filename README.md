@@ -377,21 +377,45 @@ cd backend
 cp .env.example .env
 ```
 
-Now open `backend/.env` and fill in your values:
+Now open `backend/.env` and fill in **each value** as described below:
 
 ```env
 PORT=5000
+
+# Paste your MongoDB Atlas connection string here (from Step 2)
 MONGO_URI=mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/whatsapp-clone?retryWrites=true&w=majority
-JWT_SECRET=any_long_random_string_minimum_32_characters
+
+# Generate your own JWT secret by running this command in your terminal:
+#   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# Copy the output and paste it here
+JWT_SECRET=paste_the_generated_64_character_hex_string_here
+
+# Leave this as-is for local development
 CLIENT_URL=http://localhost:5173
+
+# Your Gmail address (from Step 3)
 EMAIL_USER=your_gmail@gmail.com
+
+# Your Gmail App Password — 16 characters, no spaces (from Step 3)
 EMAIL_PASS=your16charapppassword
 ```
 
-> **JWT_SECRET** can be any random string. Generate one with:
-> ```bash
-> node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-> ```
+#### How to generate JWT_SECRET
+
+The JWT secret is a random string used to sign login tokens. You generate your own — it doesn't come from any external service.
+
+Run this **once** in your terminal:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+You will see output like:
+```
+a3f8c2d1e4b5a6f7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1
+```
+
+Copy that entire string and paste it as your `JWT_SECRET`. Each person running the project generates their own — it just needs to be long and random.
 
 ---
 
