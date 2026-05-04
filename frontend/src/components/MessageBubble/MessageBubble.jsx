@@ -253,9 +253,20 @@ export default function MessageBubble({
             </p>
           ) : !['poll','contact','event'].includes(message.messageType) && !message.mediaUrl && message.text ? (
             <>
-              {/* Render text with URLs as clickable blue links */}
-              <p className="bubble-text">{renderTextWithLinks()}</p>
-              {/* Link preview card — WhatsApp style */}
+              {/* WhatsApp behavior:
+                  - If text is ONLY a URL and we have a preview → hide text, show only preview
+                  - If text has content beyond the URL → show text (with teal URL links), then preview below */}
+              {(() => {
+                const hasPreview = !!message.linkPreview?.title;
+                const textWithoutUrl = hasPreview
+                  ? message.text.replace(/https?:\/\/[^\s]+/g, '').trim()
+                  : message.text;
+                const showText = !hasPreview || textWithoutUrl.length > 0;
+                return showText ? (
+                  <p className="bubble-text">{renderTextWithLinks()}</p>
+                ) : null;
+              })()}
+              {/* Link preview card */}
               {message.linkPreview?.title && (
                 <a
                   href={message.linkPreview.url}
@@ -264,15 +275,6 @@ export default function MessageBubble({
                   className="link-preview"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="link-preview-body">
-                    {message.linkPreview.siteName && (
-                      <span className="link-preview-site">{message.linkPreview.siteName.toUpperCase()}</span>
-                    )}
-                    <span className="link-preview-title">{decodeHtml(message.linkPreview.title)}</span>
-                    {message.linkPreview.description && (
-                      <span className="link-preview-desc">{decodeHtml(message.linkPreview.description)}</span>
-                    )}
-                  </div>
                   {message.linkPreview.image && (
                     <img
                       src={message.linkPreview.image}
@@ -281,7 +283,11 @@ export default function MessageBubble({
                       onError={(e) => { e.target.style.display = 'none'; }}
                     />
                   )}
-                  <div className="link-preview-footer">
+                  <div className="link-preview-body">
+                    <span className="link-preview-title">{decodeHtml(message.linkPreview.title)}</span>
+                    {message.linkPreview.description && (
+                      <span className="link-preview-desc">{decodeHtml(message.linkPreview.description)}</span>
+                    )}
                     <span className="link-preview-url">{message.linkPreview.url}</span>
                   </div>
                 </a>
