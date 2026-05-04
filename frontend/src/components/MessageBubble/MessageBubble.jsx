@@ -38,7 +38,7 @@ export default function MessageBubble({
   onReply, onEdit, onDelete, onStar, onPin, onForward, onCopy,
   currentUserId, onVote,
   playingAudioId, onAudioPlay, onAudioEnded,
-  onReact,
+  onReact, onScrollToMessage,
 }) {
   const [menuOpen, setMenuOpen]       = useState(false);
   const [menuPos, setMenuPos]         = useState({ top: 0, left: 0 });
@@ -85,6 +85,31 @@ export default function MessageBubble({
         ? <mark key={i} className="highlight">{part}</mark>
         : part
     );
+  };
+
+  // Render text with URLs as clickable blue links + search highlight
+  const renderTextWithLinks = () => {
+    const URL_RE = /(https?:\/\/[^\s]+)/g;
+    const text = message.text;
+    const parts = text.split(URL_RE);
+    return parts.map((part, i) => {
+      if (URL_RE.test(part)) {
+        URL_RE.lastIndex = 0;
+        return (
+          <a key={i} href={part} target="_blank" rel="noreferrer"
+            className="msg-link" onClick={(e) => e.stopPropagation()}>
+            {part}
+          </a>
+        );
+      }
+      if (!searchTerm?.trim()) return part;
+      const subParts = part.split(new RegExp(`(${searchTerm})`, 'gi'));
+      return subParts.map((s, j) =>
+        s.toLowerCase() === searchTerm?.toLowerCase()
+          ? <mark key={`${i}-${j}`} className="highlight">{s}</mark>
+          : s
+      );
+    });
   };
 
   const act = (fn) => { setMenuOpen(false); fn(); };
@@ -189,7 +214,11 @@ export default function MessageBubble({
         >
           {/* Reply preview */}
           {message.replyTo && !message.isDeleted && (
-            <div className="reply-preview">
+            <div
+              className="reply-preview"
+              onClick={() => onScrollToMessage?.(message.replyTo._id)}
+              style={{ cursor: onScrollToMessage ? 'pointer' : 'default' }}
+            >
               <div className="reply-bar" />
               <div className="reply-content">
                 <span className="reply-sender">
@@ -223,7 +252,41 @@ export default function MessageBubble({
               <BanIcon /><span>{isOwn ? 'You deleted this message' : 'This message was deleted'}</span>
             </p>
           ) : !['poll','contact','event'].includes(message.messageType) && !message.mediaUrl && message.text ? (
-            <p className="bubble-text">{renderText()}</p>
+            <>
+              {/* Render text with URLs as clickable blue links */}
+              <p className="bubble-text">{renderTextWithLinks()}</p>
+              {/* Link preview card — WhatsApp style */}
+              {message.linkPreview?.title && (
+                <a
+                  href={message.linkPreview.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="link-preview"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="link-preview-body">
+                    {message.linkPreview.siteName && (
+                      <span className="link-preview-site">{message.linkPreview.siteName.toUpperCase()}</span>
+                    )}
+                    <span className="link-preview-title">{decodeHtml(message.linkPreview.title)}</span>
+                    {message.linkPreview.description && (
+                      <span className="link-preview-desc">{decodeHtml(message.linkPreview.description)}</span>
+                    )}
+                  </div>
+                  {message.linkPreview.image && (
+                    <img
+                      src={message.linkPreview.image}
+                      alt={message.linkPreview.title}
+                      className="link-preview-img"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  )}
+                  <div className="link-preview-footer">
+                    <span className="link-preview-url">{message.linkPreview.url}</span>
+                  </div>
+                </a>
+              )}
+            </>
           ) : null}
 
           {/* Meta */}
@@ -345,6 +408,14 @@ export default function MessageBubble({
 
     </>
   );
+}
+
+// Decode HTML entities (e.g. &#39; → ')
+function decodeHtml(str) {
+  if (!str) return str;
+  return str.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n))
+            .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'");
 }
 
 // WhatsApp's 6 quick reactions

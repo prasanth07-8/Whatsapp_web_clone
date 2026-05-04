@@ -1,10 +1,43 @@
 const Message = require('../models/Message');
 const Chat    = require('../models/Chat');
+const fetch   = require('node-fetch');
 
 const populate = (q) => q
   .populate('senderId', 'username email avatar')
   .populate('replyTo')
   .populate('poll.options.votes', 'username avatar');
+
+// Extract first URL from text
+const URL_REGEX = /https?:\/\/[^\s]+/i;
+
+// Scrape Open Graph tags from a URL
+async function scrapeOG(url) {
+  try {
+    const res = await fetch(url, {
+      timeout: 5000,
+      headers: { 'User-Agent': 'WhatsAppBot/1.0' },
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    const get = (prop) => {
+      const m = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'))
+               || html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'));
+      return m ? m[1] : null;
+    };
+
+    const title = get('og:title') || get('twitter:title')
+      || (html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]) || null;
+    const description = get('og:description') || get('twitter:description') || get('description') || null;
+    const image = get('og:image') || get('twitter:image') || null;
+    const siteName = get('og:site_name') || new URL(url).hostname.replace('www.', '') || null;
+
+    if (!title && !description && !image) return null;
+    return { url, title, description, image, siteName };
+  } catch {
+    return null;
+  }
+}
 
 // Send a message
 exports.sendMessage = async (req, res) => {
@@ -14,23 +47,42 @@ exports.sendMessage = async (req, res) => {
     if (!chatId || !receiverId)
       return res.status(400).json({ message: 'chatId and receiverId are required' });
 
+    // Check if receiver has blocked the sender (skip for self-chat)
+    if (receiverId && receiverId !== req.userId) {
+      const User = require('../models/User');
+      const receiver = await User.findById(receiverId).select('blockedUsers');
+      if (receiver?.blockedUsers?.some(id => id.toString() === req.userId)) {
+        return res.status(403).json({ message: 'blocked' });
+      }
+    }
+
     // Special message types don't need text or media
     const specialTypes = ['poll', 'contact', 'event'];
     if (!specialTypes.includes(messageType) && !text?.trim() && !mediaUrl)
       return res.status(400).json({ message: 'Message must have text or media' });
 
+    // Scrape link preview if text contains a URL (async, non-blocking)
+    let linkPreview = null;
+    if (text?.trim() && !mediaUrl && !['poll','contact','event'].includes(messageType)) {
+      const urlMatch = text.match(URL_REGEX);
+      if (urlMatch) {
+        linkPreview = await scrapeOG(urlMatch[0]);
+      }
+    }
+
     const message = await Message.create({
       chatId, senderId: req.userId,
-      receiverId: receiverId || req.userId, // self-chat: receiverId = senderId
+      receiverId: receiverId || req.userId,
       text: text?.trim() || '',
       replyTo: replyTo || null,
       mediaUrl:    mediaUrl    || null,
       mediaType:   mediaType   || null,
       mediaName:   mediaName   || null,
       messageType: messageType || 'text',
-      ...(poll    && { poll }),
-      ...(contact && { contact }),
-      ...(event   && { event }),
+      ...(poll        && { poll }),
+      ...(contact     && { contact }),
+      ...(event       && { event }),
+      ...(linkPreview && { linkPreview }),
       status: 'sent',
     });
 
@@ -246,7 +298,8 @@ exports.getAllMedia = async (req, res) => {
   }
 };
 
-// React to a message (toggle: add if not present, remove if same emoji already set)
+// Export scrapeOG for use in link-preview endpoint
+exports.scrapeOG = scrapeOG;
 exports.reactToMessage = async (req, res) => {
   try {
     const { emoji } = req.body;

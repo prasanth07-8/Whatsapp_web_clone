@@ -68,3 +68,37 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// Toggle block/unblock a user
+exports.toggleBlock = async (req, res) => {
+  try {
+    const { userId } = req.params; // user to block/unblock
+    if (userId === req.userId) return res.status(400).json({ message: 'Cannot block yourself' });
+
+    const me = await User.findById(req.userId);
+    if (!me) return res.status(404).json({ message: 'User not found' });
+
+    const isBlocked = me.blockedUsers?.some(id => id.toString() === userId);
+    if (isBlocked) {
+      me.blockedUsers = me.blockedUsers.filter(id => id.toString() !== userId);
+    } else {
+      if (!me.blockedUsers) me.blockedUsers = [];
+      me.blockedUsers.push(userId);
+    }
+    await me.save();
+    res.json({ isBlocked: !isBlocked, userId });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Check if a user is blocked by the current user
+exports.getBlockStatus = async (req, res) => {
+  try {
+    const me = await User.findById(req.userId).select('blockedUsers');
+    const isBlocked = me?.blockedUsers?.some(id => id.toString() === req.params.userId) || false;
+    res.json({ isBlocked });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

@@ -42,6 +42,14 @@ const messageSchema = new mongoose.Schema({
     emoji:  { type: String, required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   }],
+  // Link preview (OG tags scraped from URLs in text)
+  linkPreview: {
+    url:         { type: String },
+    title:       { type: String },
+    description: { type: String },
+    image:       { type: String },
+    siteName:    { type: String },
+  },
 }, { timestamps: true });
 
 messageSchema.index({ chatId: 1, createdAt: 1 });

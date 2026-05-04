@@ -1,5 +1,9 @@
+import { useState, useEffect } from 'react';
 import DefaultAvatar from '../DefaultAvatar';
+import api from '../../services/api';
 import './ContactInfo.css';
+
+const BASE = 'http://localhost:5000';
 
 function formatLastSeen(lastSeen) {
   if (!lastSeen) return 'last seen recently';
@@ -16,7 +20,11 @@ function formatLastSeen(lastSeen) {
   return `last seen ${date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
-export default function ContactInfo({ contact, isOnline, lastSeen, mediaMessages, onClose, onClearChat, onDeleteChat }) {
+export default function ContactInfo({ contact, isOnline, lastSeen, mediaMessages, onClose, onClearChat, onDeleteChat, onBlockChange }) {
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
+  const [confirmBlock, setConfirmBlock] = useState(false);
+
   const joinedDate = contact?.createdAt
     ? new Date(contact.createdAt).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' })
     : null;
@@ -24,26 +32,51 @@ export default function ContactInfo({ contact, isOnline, lastSeen, mediaMessages
   const images = mediaMessages?.filter((m) => m.mediaType === 'image') || [];
   const docs   = mediaMessages?.filter((m) => m.mediaType === 'file')  || [];
 
+  // Fetch block status on mount
+  useEffect(() => {
+    if (!contact?._id) return;
+    api.get(`/users/block/${contact._id}`)
+      .then((res) => setIsBlocked(res.data.isBlocked))
+      .catch(() => {});
+  }, [contact?._id]);
+
+  const handleToggleBlock = async () => {
+    if (!isBlocked && !confirmBlock) {
+      setConfirmBlock(true);
+      return;
+    }
+    setConfirmBlock(false);
+    setBlockLoading(true);
+    try {
+      const { data } = await api.put(`/users/block/${contact._id}`);
+      setIsBlocked(data.isBlocked);
+      onBlockChange?.(data.isBlocked);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setBlockLoading(false);
+    }
+  };
+
   return (
     <div className="contact-info-panel">
       {/* Header */}
       <div className="ci-header">
-        <button className="ci-close" onClick={onClose}>
-          <CloseIcon />
-        </button>
+        <button className="ci-close" onClick={onClose}><CloseIcon /></button>
         <span>Contact info</span>
       </div>
 
       {/* Avatar + name */}
       <div className="ci-hero">
-        {contact?.avatar ? (
-          <img src={`http://localhost:5000${contact.avatar}`} alt={contact.username} className="ci-avatar-img" />
-        ) : (
-          <div className="ci-avatar"><DefaultAvatar /></div>
-        )}
+        {contact?.avatar
+          ? <img src={`${BASE}${contact.avatar}`} alt={contact.username} className="ci-avatar-img" />
+          : <div className="ci-avatar"><DefaultAvatar /></div>
+        }
         <h2 className="ci-name">{contact?.username}</h2>
         <p className="ci-status">
-          {isOnline ? (
+          {isBlocked ? (
+            <span className="ci-blocked-label">Blocked</span>
+          ) : isOnline ? (
             <span className="ci-online">online</span>
           ) : (
             <span>{formatLastSeen(lastSeen)}</span>
@@ -73,7 +106,6 @@ export default function ContactInfo({ contact, isOnline, lastSeen, mediaMessages
             <span className="ci-row-label">Email</span>
           </div>
         </div>
-
         {joinedDate && (
           <div className="ci-row">
             <CalendarIcon />
@@ -96,10 +128,10 @@ export default function ContactInfo({ contact, isOnline, lastSeen, mediaMessages
             {images.slice(0, 6).map((m) => (
               <img
                 key={m._id}
-                src={`http://localhost:5000${m.mediaUrl}`}
+                src={`${BASE}${m.mediaUrl}`}
                 alt=""
                 className="ci-media-thumb"
-                onClick={() => window.open(`http://localhost:5000${m.mediaUrl}`, '_blank')}
+                onClick={() => window.open(`${BASE}${m.mediaUrl}`, '_blank')}
               />
             ))}
           </div>
@@ -109,20 +141,36 @@ export default function ContactInfo({ contact, isOnline, lastSeen, mediaMessages
       {/* Actions */}
       <div className="ci-section ci-actions">
         <button className="ci-action-btn" onClick={onClearChat}>
-          <ClearIcon />
-          <span>Clear chat</span>
+          <ClearIcon /><span>Clear chat</span>
         </button>
         <button className="ci-action-btn danger" onClick={onDeleteChat}>
-          <DeleteIcon />
-          <span>Delete chat</span>
+          <DeleteIcon /><span>Delete chat</span>
         </button>
+
+        {/* Block / Unblock */}
+        {confirmBlock ? (
+          <div className="ci-block-confirm">
+            <p>Block <strong>{contact?.username}</strong>? They won't be able to send you messages.</p>
+            <div className="ci-block-confirm-actions">
+              <button className="ci-block-cancel" onClick={() => setConfirmBlock(false)}>Cancel</button>
+              <button className="ci-block-ok" onClick={handleToggleBlock} disabled={blockLoading}>
+                {blockLoading ? 'Blocking...' : 'Block'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            className={`ci-action-btn danger ${isBlocked ? 'ci-action-btn--unblock' : ''}`}
+            onClick={handleToggleBlock}
+            disabled={blockLoading}
+          >
+            <BlockIcon />
+            <span>{isBlocked ? `Unblock ${contact?.username}` : `Block ${contact?.username}`}</span>
+          </button>
+        )}
+
         <button className="ci-action-btn danger">
-          <BlockIcon />
-          <span>Block {contact?.username}</span>
-        </button>
-        <button className="ci-action-btn danger">
-          <ReportIcon />
-          <span>Report {contact?.username}</span>
+          <ReportIcon /><span>Report {contact?.username}</span>
         </button>
       </div>
     </div>

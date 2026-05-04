@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema({
   avatar:    { type: String, default: '' },
   tagline:   { type: String, default: 'Hey there! I am using WhatsApp.', maxlength: 139 },
   lastSeen:  { type: Date, default: null },
+  blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });
 
 // Hash password before saving

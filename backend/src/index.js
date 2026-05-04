@@ -39,6 +39,19 @@ app.use('/api/chats',    chatRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/upload',   uploadRoutes);
 
+// Link preview endpoint (no auth needed — just scrapes public URLs)
+const { scrapeOG } = require('./controllers/messageController');
+app.get('/api/link-preview', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ message: 'url required' });
+  try {
+    const preview = await scrapeOG(url);
+    res.json(preview || {});
+  } catch {
+    res.json({});
+  }
+});
+
 // Health check
 app.get('/', (_, res) => res.json({ status: 'API running' }));
 
